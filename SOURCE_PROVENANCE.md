@@ -13,8 +13,6 @@ The OptiScaler submodule is pinned to modified-source commit
 `7b979635b1f644a396faa2fd26208f5a50c4948d`. Its GPLv3 license is preserved at
 `LICENSES/OptiScaler-GPL-3.0.txt`.
 
-The v0.3 archive reuses the exact v0.2 binaries while correcting the release
-readme's Vulkan requirement from “1.1 or older” to “1.1 or newer”:
 
 - `amd_fidelityfx_upscaler_vk.dll`:
   `bead92d5a1cf290c5d24b6f0883830613750bedccb5bb579b8ba4f3c3ec56abf`
