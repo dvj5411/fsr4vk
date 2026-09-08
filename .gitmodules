@@ -1,0 +1,4 @@
+[submodule "optiscaler"]
+	path = optiscaler
+	url = https://github.com/dvj5411/OptiScaler.git
+	branch = codex/fsr4-vulkan-provider-integration

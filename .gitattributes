@@ -1,0 +1,4 @@
+*.bin binary
+*.dll binary
+*.spv binary
+*.zip binary

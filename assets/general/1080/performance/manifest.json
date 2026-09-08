@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "capacity": [
+    1920,
+    1080
+  ],
+  "preset": "performance",
+  "shaders": [
+    {
+      "file": "pass-00.spv",
+      "sha256": "d6a01100a56327713d2f7c1a768e41f8a31f2cadce5f37b7dac81630722ff5a2",
+      "stage_flags": "0x00000003"
+    },
+    {
+      "file": "pass-01.spv",
+      "sha256": "533dfe1af5841aac85141657066859519b96736ca455275f02f1801ff3ae5b63",
+      "stage_flags": "0x00000003"
+    },
+    {
+      "file": "pass-02.spv",
+      "sha256": "e75a2100fd9f7697ddd610315d091795fe91b68ed843f953eebdb704dff02d28",
+      "stage_flags": "0x00000000"
+    },
+    {
+      "file": "pass-03.spv",
+      "sha256": "057a2476211fec2033c535ed4fa3a22fc6be1ba07a687120ce567ceb58880da2",
+      "stage_flags": "0x00000000"
+    },
+    {
+      "file": "pass-04.spv",
+      "sha256": "2a3ae416a5cfbe5aa235263bfdef08c47d8e8ea36e9184587808dd942bd32b34",
+      "stage_flags": "0x00000000"
+    },
+    {
+      "file": "pass-05.spv",
+      "sha256": "95ab19a24ea8ebea7cbd97d0e618670fa15a6e9286e2dc2e6390ef912f330677",
+      "stage_flags": "0x00000000"
+    },
+    {
+      "file": "pass-06.spv",
+      "sha256": "71ec7992a696ed7a8e90f07318d0c29189ac5caa51075f61c0d0cc43f6f5a995",
+      "stage_flags": "0x00000000"
+    },
+    {
+      "file": "pass-07.spv",
+      "sha256": "343f69f2523c2bd12a3d7bb4f2678366a3bf797da37bc19482d96b0d03db27f6",
+      "stage_flags": "0x00000000"
+    },
+    {
+      "file": "pass-08.spv",
+      "sha256": "adfd041e50ce5c135724f199dd9000107487da37a03b553521c138b6d7a717d2",
+      "stage_flags": "0x00000000"
+    },
+    {
+      "file": "pass-09.spv",
+      "sha256": "deceda45660b8ca9e652d6db74ceae7080eb1d3cdccf54f6610f3952cbf217c0",
+      "stage_flags": "0x00000000"
+    },
+    {
+      "file": "pass-10.spv",
+      "sha256": "4d608b41b78a3e43a72f1afa6abdcc6c91a7d8257b3448a1f2814328b8d73960",
+      "stage_flags": "0x00000000"
+    },
+    {
+      "file": "pass-11.spv",
+      "sha256": "fc6ea29cb990cc5d43a33013c3284b83d8aafcea4b042af71c763015fe0fc4ad",
+      "stage_flags": "0x00000000"
+    },
+    {
+      "file": "pass-12.spv",
+      "sha256": "9941c91ee943b99d384d71d35ad9b17c3638c06b0abff461e27f107a15568cd5",
+      "stage_flags": "0x00000000"
+    },
+    {
+      "file": "pass-13.spv",
+      "sha256": "98cbf4defce61fa045da599a9bb799f1f9162001dfc87292a3a4ac0b481e53ae",
+      "stage_flags": "0x00000000"
+    },
+    {
+      "file": "pass-14.spv",
+      "sha256": "a3f84fc43eac65ce459692e0b5e017ad3ea2615703a0ad016e474f87fdb9eaec",
+      "stage_flags": "0x00000000"
+    }
+  ],
+  "initializer_sha256": "fe2ad00e9e7fc563bd9ee01ab72c82bb557bf0d8365a085e833749547e089aab",
+  "weights_sha256": "bb05b470e90f04d9eed0ea7600862992cc66be2b0d23c9d33142b907f9d50d68"
+}
