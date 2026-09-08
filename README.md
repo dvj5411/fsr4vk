@@ -12,6 +12,11 @@ API headers needed by that source, and a pinned OptiScaler source submodule.
 > **Warning:** This is experimental software. Back up replaced files, do not use
 > it with online or anti-cheat-protected games, and expect compatibility issues.
 
+## AI Disclosure
+
+This project has been heavily assisted by AI models such as GPT-5.6 Sol and 6 Astra. Most of the tedious work such as individual shader dumping from VKD3D-Proton were performed by AI. 
+I'm not going to pretend it wasn't helped by it. However, many parts were still handled by a person.
+
 ## Requirements
 
 The provider build currently uses a Unix-like host with:
