@@ -92,6 +92,3 @@ OptiScaler is GPLv3; see
 pinned source in the `optiscaler` submodule. See
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
 [`SOURCE_PROVENANCE.md`](SOURCE_PROVENANCE.md) for exact revisions.
-
-Keep the repository private until the provenance and public-release review is
-complete.
