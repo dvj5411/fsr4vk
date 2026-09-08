@@ -2,7 +2,7 @@
 
 The provider source and build inputs were assembled from the private research
 repository `dvj5411/fsr4-vulkan-translation` at commit
-`18ecd42c9c73d9b21db0d9acd297a5dcc4784a3c`.
+`dc3deb380d215a9801caf456eda4b12787715ed3`.
 
 The minimum AMD FFX API headers and the model/shader material derive from AMD's
 FidelityFX SDK commit `01446e6a74888bf349652fcf2cbf5f642d30c2bf`
@@ -10,13 +10,12 @@ FidelityFX SDK commit `01446e6a74888bf349652fcf2cbf5f642d30c2bf`
 `LICENSES/AMD-FidelityFX-SDK-MIT.md`.
 
 The OptiScaler submodule is pinned to modified-source commit
-`7b979635b1f644a396faa2fd26208f5a50c4948d`. Its GPLv3 license is preserved at
+`1237d47547c8da6a0577c57789fe375cdfcd1f8a`. Its GPLv3 license is preserved at
 `LICENSES/OptiScaler-GPL-3.0.txt`.
 
-The v0.3 archive reuses the exact v0.2 binaries while correcting the release
-readme's Vulkan requirement from “1.1 or older” to “1.1 or newer”:
+The v0.3.1 archive contains binaries built from those current revisions:
 
 - `amd_fidelityfx_upscaler_vk.dll`:
-  `bead92d5a1cf290c5d24b6f0883830613750bedccb5bb579b8ba4f3c3ec56abf`
+  `10bd84cc7758e2ab4e4a71813c5718b02e880f2e4d00769c0387caaabedb69ff`
 - `OptiScaler.dll`:
-  `22f3b3fbe9a35c43b6a977b5b3be698e931f3e5cbcbef31da30676242f15e88c`
+  `c3e9499019e3b89927a65ed93a94d6f7f351ed6c834688e26757b1f5656bf722`

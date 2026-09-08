@@ -72,6 +72,16 @@ void diagnostic(const ProviderContext& context, const std::string& text) noexcep
     } catch (...) { }
 }
 
+void provider_message(const ProviderContext& context, uint32_t type,
+                      const std::string& text) noexcept {
+    diagnostic(context,text);
+    if (!context.message) return;
+    try {
+        const std::wstring wide(text.begin(),text.end());
+        context.message(type,wide.c_str());
+    } catch (...) { }
+}
+
 std::filesystem::path asset_root() {
     if (const char* root=std::getenv("FSR4_VK_ASSET_ROOT")) return root;
 #if defined(FSR4_EMBEDDED_ASSETS)
@@ -343,20 +353,28 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
     const auto rw=d.renderSize.width,rh=d.renderSize.height;
     const auto ow=d.upscaleSize.width ? d.upscaleSize.width : provider->maxUpscaleSize.width;
     const auto oh=d.upscaleSize.height ? d.upscaleSize.height : provider->maxUpscaleSize.height;
-    if (!d.commandList || (!provider->general && (rw != kProviderRenderWidth || rh != kProviderRenderHeight ||
-        (d.upscaleSize.width && d.upscaleSize.width != 1920) ||
-        (d.upscaleSize.height && d.upscaleSize.height != 1080))) || d.enableSharpening ||
-        d.flags || !std::isfinite(d.preExposure) || d.preExposure <= 0 ||
-        d.reactive.resource || d.transparencyAndComposition.resource)
+    const auto reject = [provider](const char* reason) {
+        provider_message(*provider,FFX_API_MESSAGE_TYPE_ERROR,
+                         std::string("FSR4 Vulkan dispatch rejected: ")+reason);
         return FFX_API_RETURN_ERROR_PARAMETER;
-    const auto resource = [](const FfxApiResource& r, uint32_t width, uint32_t height,
+    };
+    if (!d.commandList) return reject("null command list");
+    if (!provider->general && (rw != kProviderRenderWidth || rh != kProviderRenderHeight ||
+        (d.upscaleSize.width && d.upscaleSize.width != 1920) ||
+        (d.upscaleSize.height && d.upscaleSize.height != 1080)))
+        return reject("unsupported legacy dimensions");
+    if (d.enableSharpening) return reject("internal sharpening is unsupported");
+    if (d.flags) return reject("dispatch flags are unsupported");
+    if (d.reactive.resource || d.transparencyAndComposition.resource)
+        return reject("optional masks are unsupported");
+    const auto resource = [](const char* name, const FfxApiResource& r, uint32_t width, uint32_t height,
                              uint32_t format, VkFormat vkformat, uint32_t state,
                              uint32_t depth_usage = 0) {
         if (!r.resource || r.description.type != FFX_API_RESOURCE_TYPE_TEXTURE2D ||
             (r.description.usage & (FFX_API_RESOURCE_USAGE_DEPTHTARGET | FFX_API_RESOURCE_USAGE_STENCILTARGET)) != depth_usage ||
             r.description.width != width || r.description.height != height ||
             r.description.format != format || r.state != state)
-            throw std::invalid_argument("unsupported input resource");
+            throw std::invalid_argument(std::string("unsupported ")+name+" resource");
         return fsr4core::Image{reinterpret_cast<VkImage>(r.resource),VK_NULL_HANDLE,
                               VK_NULL_HANDLE,vkformat,width,height};
     };
@@ -389,16 +407,16 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         const bool packed_output=d.output.description.format==FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT;
         const uint32_t depth_stencil=FFX_API_RESOURCE_USAGE_DEPTHTARGET | FFX_API_RESOURCE_USAGE_STENCILTARGET;
         const bool game_depth=(d.depth.description.usage & depth_stencil)==depth_stencil;
-        const auto color = resource(d.color,rw,rh,packed_color ? FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT : FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,
+        const auto color = resource("color",d.color,rw,rh,packed_color ? FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT : FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,
             packed_color ? VK_FORMAT_B10G11R11_UFLOAT_PACK32 : VK_FORMAT_R16G16B16A16_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
-        const auto depth = resource(d.depth,rw,rh,FFX_API_SURFACE_FORMAT_R32_FLOAT,
+        const auto depth = resource("depth",d.depth,rw,rh,FFX_API_SURFACE_FORMAT_R32_FLOAT,
             game_depth ? VK_FORMAT_D32_SFLOAT_S8_UINT : VK_FORMAT_R32_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ,
             game_depth ? depth_stencil : 0);
-        const auto motion = resource(d.motionVectors,rw,rh,FFX_API_SURFACE_FORMAT_R16G16_FLOAT,
+        const auto motion = resource("motion",d.motionVectors,rw,rh,FFX_API_SURFACE_FORMAT_R16G16_FLOAT,
             VK_FORMAT_R16G16_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
-        const auto exposure = (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE) ? fsr4core::Image{} : resource(d.exposure,1,1,FFX_API_SURFACE_FORMAT_R32_FLOAT,
+        const auto exposure = (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE) ? fsr4core::Image{} : resource("exposure",d.exposure,1,1,FFX_API_SURFACE_FORMAT_R32_FLOAT,
             VK_FORMAT_R32_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
-        const auto output = resource(d.output,ow,oh,packed_output ? FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT : FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,
+        const auto output = resource("output",d.output,ow,oh,packed_output ? FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT : FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,
             packed_output ? VK_FORMAT_B10G11R11_UFLOAT_PACK32 : VK_FORMAT_R16G16B16A16_SFLOAT,FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
         fsr4core::OptimizedConstants c{};
         const auto padded_w=fsr4::round_up(ow,8),padded_h=fsr4::round_up(oh,8);
@@ -414,7 +432,11 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         c.max_render_size[0]=provider->general ? provider->maxRenderSize.width : kProviderRenderWidth;
         c.max_render_size[1]=provider->general ? provider->maxRenderSize.height : kProviderRenderHeight;
         c.width=padded_w; c.height=padded_h; c.width_lr=rw; c.height_lr=rh;
-        c.reset=d.reset || force_reset; c.pre_exposure=d.preExposure;
+        c.reset=d.reset || force_reset;
+        c.pre_exposure=fsr4::sanitize_pre_exposure(d.preExposure);
+        if (c.pre_exposure!=d.preExposure && provider->first_dispatch)
+            provider_message(*provider,FFX_API_MESSAGE_TYPE_WARNING,
+                             "FSR4 Vulkan replaced invalid pre-exposure with 1.0");
         core->record(static_cast<VkCommandBuffer>(d.commandList),color,depth,motion,exposure,output,c);
         if(provider->general) {
             provider->active_preset=selected_preset;
@@ -429,6 +451,17 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
             provider->first_dispatch=false;
         }
         return FFX_API_RETURN_OK;
-    } catch (const std::invalid_argument&) { return FFX_API_RETURN_ERROR_PARAMETER; }
-      catch (...) { return FFX_API_RETURN_ERROR_RUNTIME_ERROR; }
+    } catch (const std::invalid_argument& error) {
+        provider_message(*provider,FFX_API_MESSAGE_TYPE_ERROR,
+                         std::string("FSR4 Vulkan dispatch rejected: ")+error.what());
+        return FFX_API_RETURN_ERROR_PARAMETER;
+    } catch (const std::exception& error) {
+        provider_message(*provider,FFX_API_MESSAGE_TYPE_ERROR,
+                         std::string("FSR4 Vulkan dispatch failed: ")+error.what());
+        return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
+    } catch (...) {
+        provider_message(*provider,FFX_API_MESSAGE_TYPE_ERROR,
+                         "FSR4 Vulkan dispatch failed: unknown exception");
+        return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
+    }
 }

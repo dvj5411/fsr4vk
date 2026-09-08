@@ -81,6 +81,8 @@ Start with an existing working OptiScaler 10.0 nightly installation.
 The current experimental path requires Vulkan 1.1 or newer and the provider's
 required Vulkan device features. The validated hardware baseline is an RDNA2
 Radeon PRO W6400; support for other GPU/driver combinations is not implied.
+OptiScaler routes its sharpening control through RCAS because internal provider
+sharpening is not supported.
 
 ## Licensing and provenance
 
@@ -93,5 +95,5 @@ pinned source in the `optiscaler` submodule. See
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
 [`SOURCE_PROVENANCE.md`](SOURCE_PROVENANCE.md) for exact revisions.
 
-Keep the repository private until the provenance and public-release review is
-complete.
+Public distribution remains experimental. Review the recorded provenance and
+license boundaries before reusing or redistributing the model/shader material.
