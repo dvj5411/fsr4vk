@@ -17,4 +17,6 @@ x86_64-w64-mingw32-g++ -std=c++20 -O2 -shared -static \
     -Wall -Wextra -Wno-missing-field-initializers \
     -I"$sdk_root/include" "$repo_root/provider/ffx_vk_provider.cpp" "${embedded_args[@]}" \
     -Wl,-Bdynamic "${vulkan_library[@]}" -Wl,-Bstatic -o "$output_dir/amd_fidelityfx_upscaler_vk.dll"
+cp "$output_dir/amd_fidelityfx_upscaler_vk.dll" "$output_dir/amd_fidelityfx_vk.dll"
 echo "$output_dir/amd_fidelityfx_upscaler_vk.dll"
+echo "$output_dir/amd_fidelityfx_vk.dll"

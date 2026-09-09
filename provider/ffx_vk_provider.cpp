@@ -11,6 +11,9 @@
 #include "../amd-fidelityfx-sdk/Kits/FidelityFX/upscalers/include/ffx_upscale.h"
 #include <vulkan/vulkan.h>
 
+#include "ffx_vk_device_requirements.h"
+#include "vulkan_device_features.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -42,6 +45,8 @@ struct Fsr4VulkanApiVersionDesc {
 
 constexpr std::uint64_t kVersionId =
     (0xF5A5CA1Eull << 32) | ((4ull << 22) | (0ull << 12) | 2ull);
+constexpr std::uint64_t kFsr314CompatibilityVersionId =
+    (0xF5A5CA1Eull << 32) | ((3ull << 22) | (1ull << 12) | 4ull);
 constexpr const char* kVersionName = "4.0.2c Vulkan INT8";
 
 struct ProviderContext {
@@ -61,6 +66,7 @@ struct ProviderContext {
     uint32_t last_output_width=0,last_output_height=0;
     std::filesystem::path diagnostic_path;
     bool first_dispatch = true;
+    bool sharpening_ignored_logged = false;
 };
 
 void diagnostic(const ProviderContext& context, const std::string& text) noexcept {
@@ -159,6 +165,44 @@ float radicalInverse(std::uint32_t index, std::uint32_t base) {
     return value;
 }
 
+ffxReturnCode_t prepareVulkanDevice(ffxQueryDescVkPrepareDevice* query) noexcept {
+    if (!query || !query->physicalDevice || !query->sourceCreateInfo) {
+        return FFX_API_RETURN_ERROR_PARAMETER;
+    }
+
+    query->outputCreateInfo = nullptr;
+    query->token = nullptr;
+    query->errorMessage = nullptr;
+    static thread_local std::string error;
+
+    try {
+        auto requirements = std::make_unique<fsr4vk::DeviceFeatures>(
+            query->physicalDevice, *query->sourceCreateInfo, query->apiVersion,
+            query->getPhysicalDeviceFeatures2,
+            query->enumerateDeviceExtensionProperties);
+        query->outputCreateInfo = requirements->get();
+        query->token = requirements.release();
+        return FFX_API_RETURN_OK;
+    } catch (const std::exception& exception) {
+        error = exception.what();
+        query->errorMessage = error.c_str();
+        return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
+    } catch (...) {
+        error = "unknown Vulkan device-requirements failure";
+        query->errorMessage = error.c_str();
+        return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
+    }
+}
+
+ffxReturnCode_t releaseVulkanDevice(ffxQueryDescVkReleaseDevice* query) noexcept {
+    if (!query || !query->token) {
+        return FFX_API_RETURN_ERROR_PARAMETER;
+    }
+    delete static_cast<fsr4vk::DeviceFeatures*>(query->token);
+    query->token = nullptr;
+    return FFX_API_RETURN_OK;
+}
+
 ffxReturnCode_t queryUpscale(ffxContext* context, ffxQueryDescHeader* header) {
     switch (header->type) {
     case FFX_API_QUERY_DESC_TYPE_GET_PROVIDER_VERSION: {
@@ -245,7 +289,13 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
         return FFX_API_RETURN_NO_PROVIDER;
     }
     const auto version = findVersion(header);
-    if (version != 0 && version != kVersionId) return FFX_API_RETURN_NO_PROVIDER;
+    // Well-behaved callers query this DLL and request kVersionId. Some games
+    // loading amd_fidelityfx_vk.dll pin the stock FSR 3.1.4 provider ID
+    // instead; accept that ABI-compatible selection as a drop-in alias.
+    if (version != 0 && version != kVersionId &&
+        version != kFsr314CompatibilityVersionId) {
+        return FFX_API_RETURN_NO_PROVIDER;
+    }
     const auto* backend = findBackend(header);
     if (!backend || !backend->device || !backend->physicalDevice ||
         !backend->getDeviceProcAddr) {
@@ -323,6 +373,12 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxQuery(
     ffxContext* context,
     ffxQueryDescHeader* header) {
     if (!header) return FFX_API_RETURN_ERROR_PARAMETER;
+    if (!context && header->type == FFX_API_QUERY_DESC_TYPE_VK_PREPARE_DEVICE) {
+        return prepareVulkanDevice(reinterpret_cast<ffxQueryDescVkPrepareDevice*>(header));
+    }
+    if (!context && header->type == FFX_API_QUERY_DESC_TYPE_VK_RELEASE_DEVICE) {
+        return releaseVulkanDevice(reinterpret_cast<ffxQueryDescVkReleaseDevice*>(header));
+    }
     if (!context && header->type == FFX_API_QUERY_DESC_TYPE_GET_VERSIONS) {
         auto* query = reinterpret_cast<ffxQueryDescGetVersions*>(header);
         if (!query->outputCount) return FFX_API_RETURN_ERROR_PARAMETER;
@@ -363,7 +419,11 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         (d.upscaleSize.width && d.upscaleSize.width != 1920) ||
         (d.upscaleSize.height && d.upscaleSize.height != 1080)))
         return reject("unsupported legacy dimensions");
-    if (d.enableSharpening) return reject("internal sharpening is unsupported");
+    if (d.enableSharpening && !provider->sharpening_ignored_logged) {
+        provider_message(*provider, FFX_API_MESSAGE_TYPE_WARNING,
+                         "FSR4 Vulkan internal sharpening is unavailable; use host RCAS if desired");
+        provider->sharpening_ignored_logged = true;
+    }
     if (d.flags) return reject("dispatch flags are unsupported");
     if (d.reactive.resource || d.transparencyAndComposition.resource)
         return reject("optional masks are unsupported");
@@ -404,11 +464,17 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
             force_reset=provider->active_preset!=preset || provider->last_output_width!=ow || provider->last_output_height!=oh;
         }
         const bool packed_color=d.color.description.format==FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT;
+        const bool shared_exponent_color=
+            d.color.description.format==FFX_API_SURFACE_FORMAT_R9G9B9E5_SHAREDEXP;
         const bool packed_output=d.output.description.format==FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT;
         const uint32_t depth_stencil=FFX_API_RESOURCE_USAGE_DEPTHTARGET | FFX_API_RESOURCE_USAGE_STENCILTARGET;
         const bool game_depth=(d.depth.description.usage & depth_stencil)==depth_stencil;
-        const auto color = resource("color",d.color,rw,rh,packed_color ? FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT : FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,
-            packed_color ? VK_FORMAT_B10G11R11_UFLOAT_PACK32 : VK_FORMAT_R16G16B16A16_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
+        const auto color_format=shared_exponent_color ? FFX_API_SURFACE_FORMAT_R9G9B9E5_SHAREDEXP :
+            (packed_color ? FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT : FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT);
+        const auto color_vk_format=shared_exponent_color ? VK_FORMAT_E5B9G9R9_UFLOAT_PACK32 :
+            (packed_color ? VK_FORMAT_B10G11R11_UFLOAT_PACK32 : VK_FORMAT_R16G16B16A16_SFLOAT);
+        const auto color = resource("color",d.color,rw,rh,color_format,color_vk_format,
+            FFX_API_RESOURCE_STATE_COMPUTE_READ);
         const auto depth = resource("depth",d.depth,rw,rh,FFX_API_SURFACE_FORMAT_R32_FLOAT,
             game_depth ? VK_FORMAT_D32_SFLOAT_S8_UINT : VK_FORMAT_R32_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ,
             game_depth ? depth_stencil : 0);
