@@ -185,6 +185,11 @@ ffxReturnCode_t prepareVulkanDevice(ffxQueryDescVkPrepareDevice* query) noexcept
         return FFX_API_RETURN_OK;
     } catch (const std::exception& exception) {
         error = exception.what();
+        error += " (device feature chain:";
+        auto* node = static_cast<const VkBaseInStructure*>(query->sourceCreateInfo->pNext);
+        for (unsigned i=0; node && i<64; ++i, node=node->pNext)
+            error += " " + std::to_string(node->sType);
+        error += ")";
         query->errorMessage = error.c_str();
         return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
     } catch (...) {
@@ -318,6 +323,8 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
         provider->assets=assets;
         provider->general=fsr4assets::is_embedded(assets) || std::filesystem::is_directory(assets/"general");
         if (!fsr4assets::is_embedded(assets)) provider->diagnostic_path=assets/"provider.log";
+        if (const char* log=std::getenv("FSR4_VK_LOG_PATH"))
+            provider->diagnostic_path=log;
         const uint32_t nms_flags = FFX_UPSCALE_ENABLE_DEPTH_INVERTED | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
         const uint32_t permutation = create->flags & ~(FFX_UPSCALE_ENABLE_DEBUG_CHECKING | FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE);
         if (!provider->general && (create->maxUpscaleSize.width != 1920 || create->maxUpscaleSize.height != 1080 ||

@@ -279,7 +279,7 @@ class QualityContext {
     }
 public:
     const char* shader_backend() const {
-        return native_mixed_dot ? "native-mixed-dot" : "portable-fp32-dot2-int8";
+        return native_mixed_dot ? "native-mixed-dot" : "portable-int8";
     }
     QualityContext(const QualityContext&) = delete;
     QualityContext& operator=(const QualityContext&) = delete;
@@ -433,7 +433,7 @@ public:
             const auto canonical=index==14 ? 0u : index+1;
             auto name=general_bundle ? "pass-"+std::string(canonical<10 ? "0" : "")+std::to_string(canonical)+".spv"
                                            : std::string(pass.hash)+".spv";
-            if (index == 0 && !native_mixed_dot)
+            if (!native_mixed_dot)
                 name.insert(name.size() - 4, ".portable");
             const auto code = read_spirv(shader_dir / name);
             VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};

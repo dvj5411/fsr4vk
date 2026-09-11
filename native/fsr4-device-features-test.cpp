@@ -13,6 +13,7 @@ namespace {
 std::vector<const char *> available_extensions;
 bool expose_synchronization2 = true;
 bool expose_mixed_dot = true;
+bool expose_float_controls2 = true;
 
 void VKAPI_CALL query_features(VkPhysicalDevice,
                                VkPhysicalDeviceFeatures2 *features) {
@@ -86,7 +87,7 @@ void VKAPI_CALL query_features(VkPhysicalDevice,
       break;
     case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT_CONTROLS_2_FEATURES_KHR:
       reinterpret_cast<VkPhysicalDeviceShaderFloatControls2FeaturesKHR *>(node)
-          ->shaderFloatControls2 = VK_TRUE;
+          ->shaderFloatControls2 = expose_float_controls2;
       break;
     default:
       break;
@@ -378,6 +379,37 @@ int main() {
     available_extensions = saved_extensions;
   }
   expose_mixed_dot = true;
+
+  // The portable bundle avoids the broken NVIDIA float-controls2 path and
+  // must also work when this optional extension is not advertised at all.
+  const auto saved_portable_extensions = available_extensions;
+  available_extensions.erase(std::remove_if(available_extensions.begin(), available_extensions.end(),
+      [](const char* name) { return std::strcmp(name, VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME) == 0; }),
+      available_extensions.end());
+  expose_mixed_dot = expose_float_controls2 = false;
+  fsr4vk::DeviceFeatures portable_prepared(reinterpret_cast<VkPhysicalDevice>(1),
+      source, VK_API_VERSION_1_1, query_features, enumerate_extensions);
+  require(!has_extension(portable_prepared.get(), VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME),
+          "portable bundle must not require float-controls2");
+  require(!has_structure(portable_prepared.get(), VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT_CONTROLS_2_FEATURES_KHR),
+          "portable bundle must not enable float-controls2");
+  available_extensions = saved_portable_extensions;
+  expose_mixed_dot = expose_float_controls2 = true;
+
+  VkPhysicalDeviceDynamicRenderingFeatures rendering {
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES};
+  rendering.dynamicRendering = VK_TRUE;
+  rendering.pNext = const_cast<void*>(source.pNext);
+  auto nms_source = source;
+  nms_source.pNext = &rendering;
+  fsr4vk::DeviceFeatures nms_prepared(reinterpret_cast<VkPhysicalDevice>(1),
+                                     nms_source, VK_API_VERSION_1_3,
+                                     query_features, enumerate_extensions);
+  auto* nms_rendering = static_cast<const VkPhysicalDeviceDynamicRenderingFeatures*>(
+      nms_prepared.get()->pNext);
+  require(nms_rendering != &rendering && nms_rendering->dynamicRendering == VK_TRUE,
+          "NMS dynamic-rendering feature was not preserved");
+  require(rendering.pNext == source.pNext, "NMS source feature chain was modified");
 
   expose_synchronization2 = false;
   try {

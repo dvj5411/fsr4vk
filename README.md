@@ -55,7 +55,7 @@ export FSR4_VULKAN_IMPORT_LIBRARY=/path/to/libvulkan-1.a
 ./tools/build-vulkan-provider-windows.sh
 ```
 
-The script verifies all ten bundled model/preset payloads, embeds them, and
+The script verifies all ten original and portable shader/model bundles, embeds them, and
 writes the self-contained provider under both supported discovery names:
 
 ```text
@@ -64,7 +64,11 @@ build/provider-windows/amd_fidelityfx_vk.dll
 ```
 
 Set `FSR4_PROVIDER_OUTPUT_DIR` to change the output directory or
-`FSR4_EMBED_ASSETS` to build with another verified `assets/general` tree.
+`FSR4_EMBED_ASSETS` to build with another verified `assets/general` tree and
+its sibling `assets/portable` tree. The portable INT8 backend is selected
+automatically when the VALVE mixed-dot feature is unavailable. See
+[NVIDIA validation](NVIDIA-VALIDATION.md) for tested hardware and remaining
+game validation.
 
 ## Build OptiScaler
 

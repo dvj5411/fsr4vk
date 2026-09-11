@@ -615,7 +615,7 @@ int main(int argc, char** argv) {
             auto filename=fs::exists(shader_dir/"pass-00.spv")
                 ? "pass-"+std::string(index<10 ? "0" : "")+std::to_string(index)+".spv"
                 : std::string(hash)+".spv";
-            if (index == 1 && !fsr4vk::supportsNativeMixedDot(
+            if (!fsr4vk::supportsNativeMixedDot(
                     physical_device, vkGetPhysicalDeviceFeatures2, vkEnumerateDeviceExtensionProperties))
                 filename.insert(filename.size() - 4, ".portable");
             const auto code = read_spirv(shader_dir / filename);

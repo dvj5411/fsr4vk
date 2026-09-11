@@ -8,15 +8,17 @@ import subprocess
 import sys
 import importlib.util
 
-spec = importlib.util.spec_from_file_location('lower_mixed_dot', Path(__file__).with_name('lower-mixed-dot.py'))
-lowering = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(lowering)
+spec = importlib.util.spec_from_file_location('portable_assets', Path(__file__).with_name('portable-assets.py'))
+portable_assets = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(portable_assets)
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('general', type=Path)
 p.add_argument('output', type=Path)
 a = p.parse_args()
 subprocess.run([sys.executable, str(Path(__file__).with_name('verify-general-assets.py')), str(a.general)], check=True)
+portable_root = a.general.parent/'portable'
+print(f'Verified {portable_assets.verify(a.general, portable_root)} portable shaders.')
 a.output.mkdir(parents=True, exist_ok=True)
 resources, index, entries = {}, [], []
 def add_resource(path, key, payload):
@@ -34,13 +36,9 @@ for manifest in sorted(a.general.glob('*/*/manifest.json')):
         payload = path.read_bytes()
         key = 'general/'+path.relative_to(a.general).as_posix()
         add_resource(path, key, payload)
-        if name == 'pass-01.spv':
-            portable, count = lowering.lower(payload)
-            if count != 64:
-                raise RuntimeError(f'unexpected pre-pass mixed-dot count: {path}: {count}')
-            portable_path = a.output/'portable'/path.relative_to(a.general).with_suffix('.portable.spv')
-            portable_path.parent.mkdir(parents=True, exist_ok=True)
-            portable_path.write_bytes(portable)
+        if name.endswith('.spv'):
+            portable_path = portable_root/path.relative_to(a.general)
+            portable = portable_path.read_bytes()
             add_resource(portable_path, key[:-4]+'.portable.spv', portable)
 (a.output/'embedded-assets.rc').write_text('\n'.join(f'{rid} RCDATA {json.dumps(str(path))}' for rid,path in resources.values())+'\n')
 (a.output/'embedded-asset-index.hpp').write_text(
