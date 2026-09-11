@@ -76,15 +76,24 @@ failed device preparation with `unhandled device pNext sType=1000044003`.
 The added `VkPhysicalDeviceDynamicRenderingFeatures` handler allows preparation
 to succeed.
 
-Gameplay validation is pending a manual save load. The remote controls can
-launch and close the game normally but cannot activate its hold-to-select
-menu. A successful launch or loaded DLL alone is not counted as gameplay proof.
-The final check requires a visible scene and fresh provider logs showing
-`shader_backend=portable-int8` and a recorded dispatch.
+Gameplay validation passed on 2026-09-11. The user loaded a save and confirmed
+that FSR4 works. Direct observation showed a rendered in-game scene with the
+OptiScaler overlay identifying NVIDIA GeForce RTX 3070 Ti and FSR 4.0.2.
+Fresh provider logs independently recorded five context/first-dispatch groups
+with `shader_backend=portable-int8` and `1280x720 -> 1920x1080`.
+The installed DLL SHA-256 matches the reference-tested deliverable:
+`2089da4a57dd77b8bc50100153373143853096e57eecf9e57e31c1abbbea679c`.
+See `native/validation-data/nvidia-20260911/nms-gameplay.provider.log`.
+This establishes successful live game rendering on the tested configuration;
+it is not a long-duration stability or image-quality assessment.
 
-A temporary launcher wrapper enables the opt-in `FSR4_VK_LOG_PATH` diagnostic.
-It is needed only while collecting the game evidence. Restore the backed-up
-launch options after that check; normal DLL operation does not require it.
+The temporary launcher wrapper enabled the opt-in `FSR4_VK_LOG_PATH` diagnostic
+for this session. That export has now been removed for subsequent launches,
+without interrupting the running game. Steam still references the wrapper,
+which preserves the original `PROTON_LOG=1` and
+`FSR4_VK_ENABLE_DEVICE_FEATURES=1` launch environment. The backed-up original
+launch options can replace the wrapper reference; normal DLL operation does
+not require the wrapper or diagnostic logging.
 
 ## Reproduction
 

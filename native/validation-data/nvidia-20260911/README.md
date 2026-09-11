@@ -32,7 +32,10 @@ workarounds, physical constant-buffer addressing forced to match the provider
 ABI, and NVIDIA-specific raw access chains disabled. Source identities and
 capture settings are in `assets/portable/provenance.json` and its manifests.
 
-NMS gameplay is not yet counted as passed: a manual save load is required to
-get past the hold-to-select menu. Device preparation was repaired and the
-candidate is installed. See `NVIDIA-VALIDATION.md` for the pending final check
-and the temporary diagnostic launcher setting.
+NMS gameplay passed: the user loaded a save and confirmed FSR4 working.
+Direct observation showed the rendered scene and the OptiScaler overlay
+identifying RTX 3070 Ti and FSR 4.0.2. `nms-gameplay.provider.log` records
+five fresh context/first-dispatch groups using `portable-int8` at
+1280x720 -> 1920x1080. The installed DLL hash matched the value above.
+The initialization log records provider discovery and successful device
+preparation. See `NVIDIA-VALIDATION.md` for scope and launcher cleanup details.

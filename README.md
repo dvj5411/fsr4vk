@@ -67,8 +67,7 @@ Set `FSR4_PROVIDER_OUTPUT_DIR` to change the output directory or
 `FSR4_EMBED_ASSETS` to build with another verified `assets/general` tree and
 its sibling `assets/portable` tree. The portable INT8 backend is selected
 automatically when the VALVE mixed-dot feature is unavailable. See
-[NVIDIA validation](NVIDIA-VALIDATION.md) for tested hardware and remaining
-game validation.
+[NVIDIA validation](NVIDIA-VALIDATION.md) for tested hardware, numerical results and successful NMS gameplay validation.
 
 ## Build OptiScaler
 

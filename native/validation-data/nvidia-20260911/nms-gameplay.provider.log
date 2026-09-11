@@ -1,0 +1,20 @@
+context created flags=40 api=1.1
+shader_backend=portable-int8
+first dispatch recorded: 1280x720 -> 1920x1080
+motion scale API=1.000000,1.000000 shader=0.000781,0.001389
+context created flags=40 api=1.1
+shader_backend=portable-int8
+first dispatch recorded: 1280x720 -> 1920x1080
+motion scale API=1.000000,1.000000 shader=0.000781,0.001389
+context created flags=40 api=1.1
+shader_backend=portable-int8
+first dispatch recorded: 1280x720 -> 1920x1080
+motion scale API=1.000000,1.000000 shader=0.000781,0.001389
+context created flags=40 api=1.1
+shader_backend=portable-int8
+first dispatch recorded: 1280x720 -> 1920x1080
+motion scale API=1.000000,1.000000 shader=0.000781,0.001389
+context created flags=40 api=1.1
+shader_backend=portable-int8
+first dispatch recorded: 1280x720 -> 1920x1080
+motion scale API=1.000000,1.000000 shader=0.000781,0.001389
