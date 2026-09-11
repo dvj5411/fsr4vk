@@ -9,6 +9,8 @@ The repository is intentionally small: it contains the provider source, the
 verified runtime payloads embedded into the provider DLL, the minimum AMD FFX
 API headers needed by that source, and a pinned OptiScaler source submodule.
 
+This repository is mostly maintained by AI. It periodically syncs with the upstream private repository.
+
 > **Warning:** This is experimental software. Back up replaced files, do not use
 > it with online or anti-cheat-protected games, and expect compatibility issues.
 
