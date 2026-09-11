@@ -25,9 +25,6 @@
 #include "../native/quality-context.hpp"
 
 namespace {
-constexpr auto kProviderRenderWidth = fsr4experiment::render_width;
-constexpr auto kProviderRenderHeight = fsr4experiment::render_height;
-
 constexpr ffxStructType_t kBackendVkDescType = 3u;
 constexpr ffxStructType_t kFsr4VulkanApiVersionDescType =
     0x46535234564b4150ull;
@@ -58,10 +55,8 @@ struct ProviderContext {
     FfxApiDimensions2D maxRenderSize{};
     FfxApiDimensions2D maxUpscaleSize{};
     ffxApiMessage message = nullptr;
-    std::unique_ptr<fsr4core::QualityContext> core;
-    bool general = false;
     std::filesystem::path assets;
-    std::map<std::string,std::unique_ptr<fsr4core::QualityContext>> general_cores;
+    std::map<std::string,std::unique_ptr<fsr4core::QualityContext>> cores;
     std::string active_preset;
     uint32_t last_output_width=0,last_output_height=0;
     std::filesystem::path diagnostic_path;
@@ -321,29 +316,22 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
     try {
         const auto assets=asset_root();
         provider->assets=assets;
-        provider->general=fsr4assets::is_embedded(assets) || std::filesystem::is_directory(assets/"general");
-        if (!fsr4assets::is_embedded(assets)) provider->diagnostic_path=assets/"provider.log";
+        const bool embedded=fsr4assets::is_embedded(assets);
+        if (!embedded) {
+            provider->diagnostic_path=assets/"provider.log";
+            if (!std::filesystem::is_directory(assets/"general"))
+                throw std::invalid_argument("general-resolution asset bundles are missing");
+        }
         if (const char* log=std::getenv("FSR4_VK_LOG_PATH"))
             provider->diagnostic_path=log;
         const uint32_t nms_flags = FFX_UPSCALE_ENABLE_DEPTH_INVERTED | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
         const uint32_t permutation = create->flags & ~(FFX_UPSCALE_ENABLE_DEBUG_CHECKING | FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE);
-        if (!provider->general && (create->maxUpscaleSize.width != 1920 || create->maxUpscaleSize.height != 1080 ||
-            create->maxRenderSize.width < kProviderRenderWidth || create->maxRenderSize.height < kProviderRenderHeight ||
-            (permutation != 0 && permutation != nms_flags) ||
-            ((create->flags & FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE) && permutation != nms_flags)))
-            throw std::invalid_argument("only validated fixed Quality 1080p flag combinations are supported");
-        if(provider->general) {
-            fsr4::validate_dimensions(create->maxRenderSize.width,create->maxRenderSize.height,
-                                     create->maxUpscaleSize.width,create->maxUpscaleSize.height);
-            if(permutation!=nms_flags)throw std::invalid_argument("general bundles require inverted depth and auto exposure");
-        }
+        fsr4::validate_dimensions(create->maxRenderSize.width,create->maxRenderSize.height,
+                                 create->maxUpscaleSize.width,create->maxUpscaleSize.height);
+        if(permutation!=nms_flags)
+            throw std::invalid_argument("provider requires inverted depth and auto exposure");
         if (!backend->getDeviceProcAddr(backend->device,"vkGetDescriptorEXT"))
             throw std::invalid_argument("descriptor buffer extension must be enabled on caller device");
-        if(!provider->general) provider->core = std::make_unique<fsr4core::QualityContext>(
-            provider->physicalDevice,provider->device,assets / "shaders",
-            assets / "initializers.bin",assets / "quality-pass0-weights.bin",permutation == nms_flags,
-            provider->getDeviceProcAddr,fsr4experiment::render_width,
-            fsr4experiment::render_height,1920,1080,provider->apiVersion);
         diagnostic(*provider,"context created flags="+std::to_string(create->flags)+
                    " api="+std::to_string(VK_API_VERSION_MAJOR(provider->apiVersion))+"."+
                    std::to_string(VK_API_VERSION_MINOR(provider->apiVersion)));
@@ -422,10 +410,6 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         return FFX_API_RETURN_ERROR_PARAMETER;
     };
     if (!d.commandList) return reject("null command list");
-    if (!provider->general && (rw != kProviderRenderWidth || rh != kProviderRenderHeight ||
-        (d.upscaleSize.width && d.upscaleSize.width != 1920) ||
-        (d.upscaleSize.height && d.upscaleSize.height != 1080)))
-        return reject("unsupported legacy dimensions");
     if (d.enableSharpening && !provider->sharpening_ignored_logged) {
         provider_message(*provider, FFX_API_MESSAGE_TYPE_WARNING,
                          "FSR4 Vulkan internal sharpening is unavailable; use host RCAS if desired");
@@ -450,26 +434,21 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         if(rw>provider->maxRenderSize.width || rh>provider->maxRenderSize.height ||
            ow>provider->maxUpscaleSize.width || oh>provider->maxUpscaleSize.height)
             throw std::invalid_argument("dispatch dimensions exceed context capacity");
-        auto* core=provider->core.get();
-        bool force_reset=false;
-        std::string selected_preset;
-        if(provider->general) {
-            const std::string preset=fsr4::resolution_preset(rw,ow);
-            selected_preset=preset;
-            auto& entry=provider->general_cores[preset];
-            if(!entry) {
-                const auto bucket=provider->maxUpscaleSize.width>1920 || provider->maxUpscaleSize.height>1080 ? "2160" : "1080";
-                const auto bundle=provider->assets/"general"/bucket/preset;
-                entry=std::make_unique<fsr4core::QualityContext>(provider->physicalDevice,provider->device,
-                    bundle,bundle/"initializers.bin",bundle/"weights.bin",true,
-                    provider->getDeviceProcAddr,
-                    provider->maxRenderSize.width,provider->maxRenderSize.height,
-                    provider->maxUpscaleSize.width,provider->maxUpscaleSize.height,
-                    provider->apiVersion);
-            }
-            core=entry.get();
-            force_reset=provider->active_preset!=preset || provider->last_output_width!=ow || provider->last_output_height!=oh;
+        const std::string selected_preset=fsr4::resolution_preset(rw,ow);
+        auto& core=provider->cores[selected_preset];
+        if(!core) {
+            const auto bucket=provider->maxUpscaleSize.width>1920 || provider->maxUpscaleSize.height>1080 ? "2160" : "1080";
+            const auto bundle=provider->assets/"general"/bucket/selected_preset;
+            core=std::make_unique<fsr4core::QualityContext>(provider->physicalDevice,provider->device,
+                bundle,bundle/"initializers.bin",bundle/"weights.bin",true,
+                provider->getDeviceProcAddr,
+                provider->maxRenderSize.width,provider->maxRenderSize.height,
+                provider->maxUpscaleSize.width,provider->maxUpscaleSize.height,
+                provider->apiVersion);
         }
+        const bool force_reset=provider->active_preset!=selected_preset ||
+                               provider->last_output_width!=ow ||
+                               provider->last_output_height!=oh;
         const bool packed_color=d.color.description.format==FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT;
         const bool shared_exponent_color=
             d.color.description.format==FFX_API_SURFACE_FORMAT_R9G9B9E5_SHAREDEXP;
@@ -502,8 +481,8 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         c.mv_scale[0]=d.motionVectorScale.x/d.renderSize.width;
         c.mv_scale[1]=d.motionVectorScale.y/d.renderSize.height;
         c.tex_size[0]=fsr4::round_up(provider->maxUpscaleSize.width,8); c.tex_size[1]=fsr4::round_up(provider->maxUpscaleSize.height,8);
-        c.max_render_size[0]=provider->general ? provider->maxRenderSize.width : kProviderRenderWidth;
-        c.max_render_size[1]=provider->general ? provider->maxRenderSize.height : kProviderRenderHeight;
+        c.max_render_size[0]=provider->maxRenderSize.width;
+        c.max_render_size[1]=provider->maxRenderSize.height;
         c.width=padded_w; c.height=padded_h; c.width_lr=rw; c.height_lr=rh;
         c.reset=d.reset || force_reset;
         c.pre_exposure=fsr4::sanitize_pre_exposure(d.preExposure);
@@ -511,10 +490,8 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
             provider_message(*provider,FFX_API_MESSAGE_TYPE_WARNING,
                              "FSR4 Vulkan replaced invalid pre-exposure with 1.0");
         core->record(static_cast<VkCommandBuffer>(d.commandList),color,depth,motion,exposure,output,c);
-        if(provider->general) {
-            provider->active_preset=selected_preset;
-            provider->last_output_width=ow;provider->last_output_height=oh;
-        }
+        provider->active_preset=selected_preset;
+        provider->last_output_width=ow;provider->last_output_height=oh;
         if (provider->first_dispatch) {
             diagnostic(*provider, std::string("shader_backend=") + core->shader_backend());
             diagnostic(*provider,"first dispatch recorded: "+std::to_string(rw)+"x"+

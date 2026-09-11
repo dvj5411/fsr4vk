@@ -128,6 +128,15 @@ bool has_structure(const VkDeviceCreateInfo *info, VkStructureType type) {
   return false;
 }
 
+template <class T>
+const T *find_structure(const VkDeviceCreateInfo *info, VkStructureType type) {
+  for (auto *node = static_cast<const VkBaseInStructure *>(info->pNext); node;
+       node = node->pNext)
+    if (node->sType == type)
+      return reinterpret_cast<const T *>(node);
+  return nullptr;
+}
+
 void require(bool value, const char *message) {
   if (!value)
     throw std::runtime_error(message);
@@ -311,6 +320,96 @@ int main() {
   require(
       !has_extension(vk13.get(), VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME),
       "Vulkan 1.3 path unnecessarily requires promoted float16/int8 extension");
+
+  // NMS COSMOS on the Deck supplies the individual dynamic-rendering feature
+  // even on a modern API. Preserve its value, neighbours and caller ownership.
+  for (const uint32_t api : {VK_API_VERSION_1_1, VK_API_VERSION_1_2,
+                             VK_API_VERSION_1_3}) {
+    for (const VkBool32 enabled : {VK_FALSE, VK_TRUE}) {
+      VkPhysicalDeviceTimelineSemaphoreFeatures next{
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES};
+      next.timelineSemaphore = VK_TRUE;
+      VkPhysicalDeviceDynamicRenderingFeaturesKHR rendering{
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR};
+      rendering.dynamicRendering = enabled;
+      rendering.pNext = &next;
+      VkPhysicalDeviceFeatures2 first{
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+      first.features.robustBufferAccess = VK_TRUE;
+      first.pNext = &rendering;
+      VkDeviceCreateInfo nms_source = source;
+      nms_source.pNext = &first;
+      fsr4vk::DeviceFeatures prepared(reinterpret_cast<VkPhysicalDevice>(1),
+                                      nms_source, api, query_features,
+                                      enumerate_extensions);
+      const auto *copied = find_structure<VkPhysicalDeviceDynamicRenderingFeatures>(
+          prepared.get(), VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES);
+      require(copied && copied != &rendering && copied->dynamicRendering == enabled,
+              "dynamic-rendering payload was changed or not independently copied");
+      const auto *copied_next =
+          find_structure<VkPhysicalDeviceTimelineSemaphoreFeatures>(
+              prepared.get(), VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES);
+      require(copied_next && copied_next != &next && copied->pNext == copied_next &&
+                  copied_next->timelineSemaphore == VK_TRUE,
+              "dynamic-rendering chain tail was not preserved");
+      const auto *copied_first = find_structure<VkPhysicalDeviceFeatures2>(
+          prepared.get(), VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
+      require(copied_first && copied_first->pNext == copied &&
+                  copied_first->features.robustBufferAccess == VK_TRUE,
+              "dynamic-rendering chain predecessor was not preserved");
+      require(first.pNext == &rendering && rendering.pNext == &next &&
+                  next.pNext == nullptr && rendering.dynamicRendering == enabled &&
+                  first.features.shaderInt16 == VK_FALSE,
+              "preparing NMS device mutated the caller's feature chain");
+    }
+  }
+
+  // Do not add an individual dynamic-rendering feature if the game uses the
+  // Vulkan 1.3 aggregate form. Both forms share the same semantic feature.
+  VkPhysicalDeviceVulkan13Features aggregate{
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
+  aggregate.dynamicRendering = VK_TRUE;
+  VkDeviceCreateInfo aggregate_source = source;
+  aggregate_source.pNext = &aggregate;
+  fsr4vk::DeviceFeatures aggregate_copy(reinterpret_cast<VkPhysicalDevice>(1),
+                                        aggregate_source, VK_API_VERSION_1_3,
+                                        query_features, enumerate_extensions);
+  require(find_structure<VkPhysicalDeviceVulkan13Features>(
+              aggregate_copy.get(), VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES)
+                  ->dynamicRendering == VK_TRUE &&
+              !has_structure(aggregate_copy.get(),
+                             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES),
+          "aggregate dynamic rendering was lost or duplicated");
+
+  VkBaseInStructure unknown{static_cast<VkStructureType>(0x7ffffffe), nullptr};
+  VkPhysicalDeviceTimelineSemaphoreFeatures diagnostic_tail{
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES};
+  unknown.pNext = reinterpret_cast<const VkBaseInStructure *>(&diagnostic_tail);
+  VkPhysicalDeviceDynamicRenderingFeatures diagnostic_head{
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES};
+  diagnostic_head.pNext = &unknown;
+  VkDeviceCreateInfo diagnostic_source = source;
+  diagnostic_source.pNext = &diagnostic_head;
+  try {
+    fsr4vk::DeviceFeatures unsupported(reinterpret_cast<VkPhysicalDevice>(1),
+                                       diagnostic_source, VK_API_VERSION_1_3,
+                                       query_features, enumerate_extensions);
+    throw std::runtime_error("unknown feature structure was accepted");
+  } catch (const std::runtime_error &error) {
+    require(std::strstr(error.what(), "unhandled device pNext sType=2147483646") &&
+                std::strstr(error.what(), "sTypes=[1000044003,2147483646,1000207000]"),
+            "unsupported-feature diagnostic omitted part of the input chain");
+  }
+  diagnostic_head.pNext = &diagnostic_head;
+  try {
+    fsr4vk::DeviceFeatures cyclic(reinterpret_cast<VkPhysicalDevice>(1),
+                                  diagnostic_source, VK_API_VERSION_1_3,
+                                  query_features, enumerate_extensions);
+    throw std::runtime_error("cyclic feature chain was accepted");
+  } catch (const std::runtime_error &error) {
+    require(std::strstr(error.what(), "duplicate or cyclic device pNext") != nullptr,
+            "cyclic feature chain was not rejected");
+  }
 
   // Reproduce real device chains recorded before vkCreateDevice. Oversized,
   // aligned storage lets the copier exercise every typed case without making

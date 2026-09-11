@@ -1,5 +1,4 @@
 #pragma once
-#include "experimental-resolution.hpp"
 #include "quality-recorder.hpp"
 #include "embedded-assets.hpp"
 #include "vulkan-compat.hpp"
@@ -17,8 +16,6 @@ namespace fs = std::filesystem;
 using fsr4::kPasses;
 using fsr4::image_barrier;
 constexpr uint32_t kDescriptorCount = 128;
-constexpr uint32_t kOutputWidth = 1920, kOutputHeight = 1080;
-constexpr VkDeviceSize kScratchSize = 20880256;
 constexpr VkDeviceSize kPhysicalConstantBackingSize = 2048;
 struct Buffer {
     VkBuffer buffer = VK_NULL_HANDLE;
@@ -285,12 +282,13 @@ public:
     QualityContext& operator=(const QualityContext&) = delete;
     QualityContext(VkPhysicalDevice physical, VkDevice logical, const fs::path& shader_dir,
                    const fs::path& initializer_path, const fs::path& weights_path,
-                   bool nms = false,
-                   PFN_vkGetDeviceProcAddr get_device_proc_addr = vkGetDeviceProcAddr,
-                   uint32_t max_input_width=fsr4experiment::render_width,
-                   uint32_t max_input_height=fsr4experiment::render_height,
-                   uint32_t max_output_width=1920,uint32_t max_output_height=1080,
-                   uint32_t api_version=VK_API_VERSION_1_3)
+                   bool nms,
+                   PFN_vkGetDeviceProcAddr get_device_proc_addr,
+                   uint32_t max_input_width,
+                   uint32_t max_input_height,
+                   uint32_t max_output_width,
+                   uint32_t max_output_height,
+                   uint32_t api_version)
         : physical_device(physical), device(logical),
           get_device_proc_addr(get_device_proc_addr),
           dispatch(logical, get_device_proc_addr, api_version), nms_inputs(nms) {
@@ -584,7 +582,7 @@ public:
     }
     ~QualityContext() { release(); }
     // External views must outlive GPU completion. Sampled inputs are READ_ONLY,
-    // output is GENERAL. All inputs have fixed dimensions as in the smoke test.
+    // output is GENERAL. Input dimensions are selected by each dispatch.
     void record(VkCommandBuffer command_buffer, Image color, Image depth,
                 Image motion, Image exposure_image, Image output,
                 OptimizedConstants main_constants) {

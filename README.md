@@ -69,6 +69,10 @@ its sibling `assets/portable` tree. The portable INT8 backend is selected
 automatically when the VALVE mixed-dot feature is unavailable. See
 [NVIDIA validation](NVIDIA-VALIDATION.md) for tested hardware, numerical results and successful NMS gameplay validation.
 
+Release 0.3.2.1 also preserves NMS dynamic-rendering device features on Steam
+Deck and removes the obsolete fixed-resolution provider fallback. The scalar-spill
+optimization remains a separate research experiment and is not included.
+
 ## Build OptiScaler
 
 Open `optiscaler/OptiScaler.sln` in Visual Studio 2022 and build the `Release`

@@ -80,8 +80,8 @@ struct VkPhysicalDeviceDescriptorHeapFeaturesEXT
 
 namespace fsr4vk
 {
-// Shared by device negotiation and shader selection. The portable pre-pass
-// requires no VALVE capability; INT8 network shaders are identical in both paths.
+// Shared by device negotiation and shader selection. The portable bundle
+// requires no VALVE capability and retains the packed INT8 neural operations.
 inline bool supportsNativeMixedDot(VkPhysicalDevice physical,
                                   PFN_vkGetPhysicalDeviceFeatures2 query,
                                   PFN_vkEnumerateDeviceExtensionProperties enumerate)
@@ -134,8 +134,6 @@ class DeviceFeatures
             FSR4_COPY(VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
             FSR4_COPY(VkPhysicalDeviceVulkan13Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES);
             FSR4_COPY(VkPhysicalDeviceVulkan14Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES);
-            FSR4_COPY(VkPhysicalDeviceDynamicRenderingFeatures,
-                      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES);
             FSR4_COPY(VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR,
                       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR);
             FSR4_COPY(VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT,
@@ -156,6 +154,8 @@ class DeviceFeatures
                       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_8_FEATURES_KHR);
             FSR4_COPY(VkPhysicalDeviceMaintenance6Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_6_FEATURES);
             FSR4_COPY(VkPhysicalDeviceMaintenance5Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES);
+            FSR4_COPY(VkPhysicalDeviceDynamicRenderingFeatures,
+                      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES);
             FSR4_COPY(VkPhysicalDeviceDynamicRenderingLocalReadFeatures,
                       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES);
             FSR4_COPY(VkPhysicalDeviceVertexAttributeDivisorFeatures,
@@ -416,12 +416,31 @@ class DeviceFeatures
         info.pNext = nullptr;
         VkBaseOutStructure* tail = nullptr;
         std::vector<VkStructureType> seen;
+        std::vector<const VkBaseInStructure*> sourceNodes;
+        std::string chainTypes;
         for (auto* n = static_cast<const VkBaseInStructure*>(source.pNext); n; n = n->pNext)
         {
             if (seen.size() >= 64 || std::find(seen.begin(), seen.end(), n->sType) != seen.end())
                 throw std::runtime_error("duplicate or cyclic device pNext");
             seen.push_back(n->sType);
-            auto* c = clone(n);
+            sourceNodes.push_back(n);
+            if (!chainTypes.empty())
+                chainTypes += ",";
+            chainTypes += std::to_string(n->sType);
+        }
+        // Inspect the complete header chain before copying payloads so a new
+        // unsupported structure reports all types needed for the next fix.
+        for (const auto* n : sourceNodes)
+        {
+            VkBaseOutStructure* c;
+            try
+            {
+                c = clone(n);
+            }
+            catch (const std::runtime_error& error)
+            {
+                throw std::runtime_error(std::string(error.what()) + "; device pNext sTypes=[" + chainTypes + "]");
+            }
             c->pNext = nullptr;
             if (tail)
                 tail->pNext = c;

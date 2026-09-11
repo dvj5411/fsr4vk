@@ -96,7 +96,7 @@ inline void compute_barrier(VkCommandBuffer command_buffer) {
 }
 
 
-// Records exactly the validated Quality 1280x720 -> 1920x1080 pass sequence.
+// Records the selected captured-model pass sequence at the supplied output size.
 // Caller owns all resources, submission and lifetime. Inputs/history/recurrent
 // must be SHADER_READ_ONLY_OPTIMAL; reprojected/output must be GENERAL.
 // On return history/recurrent are GENERAL; reprojected is SHADER_READ_ONLY_OPTIMAL.
@@ -110,17 +110,17 @@ inline void record_quality_frame(
     PFN_vkCmdBindDescriptorBuffersEXT bind_descriptor_buffers,
     PFN_vkCmdSetDescriptorBufferOffsetsEXT set_descriptor_offsets,
     PFN_vkCmdBindDescriptorBufferEmbeddedSamplersEXT bind_embedded_samplers,
-    VkQueryPool timestamps = VK_NULL_HANDLE, uint32_t timestamp_base = 0,
-    uint32_t output_width=1920,uint32_t output_height=1080,
-    PFN_vkCmdPipelineBarrier2 pipeline_barrier2=vkCmdPipelineBarrier2,
-    PFN_vkCmdWriteTimestamp2 write_timestamp2=vkCmdWriteTimestamp2) {
+    VkQueryPool timestamps, uint32_t timestamp_base,
+    uint32_t output_width, uint32_t output_height,
+    PFN_vkCmdPipelineBarrier2 pipeline_barrier2,
+    PFN_vkCmdWriteTimestamp2 write_timestamp2) {
     if (!command_buffer || !pipeline_layout || pipelines.size() != kPasses.size() ||
         !constants_address || !history || !recurrent || !reprojected ||
         !bind_descriptor_buffers || !set_descriptor_offsets || !bind_embedded_samplers ||
         !pipeline_barrier2 || (timestamps && !write_timestamp2))
-        throw std::invalid_argument("incomplete Quality frame recording arguments");
+        throw std::invalid_argument("incomplete upscaler frame recording arguments");
     for (auto pipeline : pipelines)
-        if (!pipeline) throw std::invalid_argument("null Quality pipeline");
+        if (!pipeline) throw std::invalid_argument("null upscaler pipeline");
     for (auto address : descriptor_addresses)
         if (!address) throw std::invalid_argument("null descriptor buffer address");
     std::array<VkDescriptorBufferBindingInfoEXT, 3> descriptor_bindings_info{};

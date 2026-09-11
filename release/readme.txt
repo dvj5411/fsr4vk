@@ -1,9 +1,10 @@
-EXPERIMENTAL FSR4.0.2 VK IMPLEMENTATION — RELEASE 0.3.2
+EXPERIMENTAL FSR4.0.2 VK IMPLEMENTATION — RELEASE 0.3.2.1
 THINGS WILL BREAK! IF YOU FIND A PROBLEM, @de_w23 ON THE OPTISCALER DISCORD!
 
 Requirements:
 Vulkan 1.1 or newer
-RDNA2-based GPU or later
+AMD RDNA2-based GPU or later; initial NVIDIA support tested on RTX 3070 Ti through Proton.
+Other NVIDIA GPUs, Intel GPUs, and native Windows NVIDIA operation are not yet validated.
 
 
 Instructions on usage:
