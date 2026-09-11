@@ -1,0 +1,115 @@
+{
+  "schema": 1,
+  "capacity": [
+    3840,
+    2160
+  ],
+  "preset": "native",
+  "shaders": [
+    {
+      "file": "pass-00.spv",
+      "sha256": "d6a01100a56327713d2f7c1a768e41f8a31f2cadce5f37b7dac81630722ff5a2",
+      "source_sha256": "d6a01100a56327713d2f7c1a768e41f8a31f2cadce5f37b7dac81630722ff5a2",
+      "dxil_sha256": "ebd1c205f6480548b3a039abd3c63b909ff61b2e51d96ccc5068eca11817105d",
+      "dxil": "996136f00380aba8"
+    },
+    {
+      "file": "pass-01.spv",
+      "sha256": "b6e046fc20602fda802b25a0af7bbbf0a91f1b7ffc55ba277153980dfa2b945f",
+      "source_sha256": "daacf83b2aea635ef28338e1c99a5711d68fdbb32b653a99449c5587ff8e397c",
+      "dxil_sha256": "f19d4e9e2cedd91750df165d06b84ec9f8d858b3644fbe08c18005b8b6ba9494",
+      "dxil": "6e7d131ff03e78ea"
+    },
+    {
+      "file": "pass-02.spv",
+      "sha256": "eb9a430b0b2b655454b97021146c0cb86550a21785a81f8cb2658555100d74ca",
+      "source_sha256": "2ed0257f3093c9af33f10b0a311a160fbccb6838a33987e58c7e56928d6b6876",
+      "dxil_sha256": "bf1568cd0b373558d42e6131aa38100deaa52cc5035f801f1d0459f17b186674",
+      "dxil": "9eb23e7cef28c632"
+    },
+    {
+      "file": "pass-03.spv",
+      "sha256": "c6b66cc5c82231456a353a779f0a62dfd7563f682d38c329ade447ec4e996941",
+      "source_sha256": "614dd3674e6fbe9a57188fffd7a6943d560ee4ccdca7f25b3251c651f857b0fa",
+      "dxil_sha256": "8f75108f00b3c646fe435304ad4572c76df5c9f11ca4e2e354f42447a65c6973",
+      "dxil": "a63e9321681498d3"
+    },
+    {
+      "file": "pass-04.spv",
+      "sha256": "fce24fab0c523f972930f8bc89a15a237e73e61b1d6e2469555e6562d58baffa",
+      "source_sha256": "3d4614a610748038f3ca333c2a22b2cc0bf567e1c5ac7a39d9a52bb87852884c",
+      "dxil_sha256": "7916c98081d32dbcf46cfd17889a036d90575c4746ab5f99bdc3eb20b762de58",
+      "dxil": "b1fee8d811a0b9f2"
+    },
+    {
+      "file": "pass-05.spv",
+      "sha256": "fc9f1e6fa6465b932f214660107056024df9ca0d691267918b98d9e7dda0c22a",
+      "source_sha256": "8be211f858b8ae22b49e87e30b33e9a6d56b0fd71a8c8f09b930be03faa16db8",
+      "dxil_sha256": "9284d3fd06b2e49bf92c7ea99559f7f46715a8293f9fc8df5f2d28a981cf62bc",
+      "dxil": "af6b2071d6748c32"
+    },
+    {
+      "file": "pass-06.spv",
+      "sha256": "4d6da170b280a36cbe42d68baca6f9bda7a37c15704f8775d685165d97b32a6d",
+      "source_sha256": "b9f210c8ccd8b884850f5f425939fb94613bb64d74640b1975b6556ed26d5e9d",
+      "dxil_sha256": "24ded8969774699645c3fbfd1f52db32c69f2ec87829b7b1286210afbb3365f0",
+      "dxil": "6f4e22f90b50ced8"
+    },
+    {
+      "file": "pass-07.spv",
+      "sha256": "21675422fe7296ca815b7cb069fde7a7d466e987427c98767a560e718ccfd1a1",
+      "source_sha256": "17146e6d1534b9d5c4352b7ef430bc18b94a57c7c8a0821ab91fb60202790928",
+      "dxil_sha256": "18f5afce1d13056b623d15c04c4047cae5b9dcb63632ff25a57bf0aef1e0c46e",
+      "dxil": "23a5334bef1696bf"
+    },
+    {
+      "file": "pass-08.spv",
+      "sha256": "c6ada098658b62bb3f1888e7c08af536d8f9577293ed8caf00535ae1746034cb",
+      "source_sha256": "88ee03f625faaf951c9d50020bcbd085f121c213bcaa7dc5c2cdf2c025c579e0",
+      "dxil_sha256": "d2a84681b32ba692c4c8a92096f538b2a2a047eb0711b9bfd313194162f7287c",
+      "dxil": "9e64d4f1556094d0"
+    },
+    {
+      "file": "pass-09.spv",
+      "sha256": "fd02b0cd61c025b7b156889a8285d18e27d6fb9e702c5233b1367891379a5e28",
+      "source_sha256": "ef557933b329a24ce56e063aff00fc93c438d2b2412200541b8f5c9c3ef4f1ca",
+      "dxil_sha256": "69f7ec234350f89b44819f6bdcea751e16e6fab38e0b763626691916e2ba052f",
+      "dxil": "42a39ddff666987c"
+    },
+    {
+      "file": "pass-10.spv",
+      "sha256": "d9c4f92490ee830907ae85ac9e445789939d31c99d6ab506d35c38abbce39ffc",
+      "source_sha256": "bfff2c7ef12a156ad5254e01f6bc34c1a928aeefe00218c89a44205ae382ab4b",
+      "dxil_sha256": "29df8a6290bd53d73f4590d6c10bbe5b3ee7a9c759c1b27c19ea056c5ec1a79b",
+      "dxil": "f215495a6ea971df"
+    },
+    {
+      "file": "pass-11.spv",
+      "sha256": "e4e97bcd5410f22ba521e55c49d1abf923893138c6eddd7e1366deda3a02d094",
+      "source_sha256": "8b06ac3ef894b3e116114b1b15ba7ad73b74b7bf4d872179c788c20a69597f64",
+      "dxil_sha256": "b3b145a2fc08a56404bba626706981e2779588b2350c67dd46d9589380caf8cf",
+      "dxil": "66136724806c076e"
+    },
+    {
+      "file": "pass-12.spv",
+      "sha256": "69a487998d88fbf457a54fd79eafc989fa9253059c2c670fc14c569250bed456",
+      "source_sha256": "6e2d7a3b85df999ef192ba57efde72fb343130b5cec594a17f04dec766f36016",
+      "dxil_sha256": "96987606ba29083bbe8324883b1f04af3798496de89a24a702de356f0f323bc4",
+      "dxil": "fc0e4bc3f54b451d"
+    },
+    {
+      "file": "pass-13.spv",
+      "sha256": "0524a0476a1d102bd441cae8d5e6e923feec94fe00e6f0135ace0f25c8ea0b43",
+      "source_sha256": "8bd16bfe6c261f1c0cadaedc9af87d2390494e01968e011731a84006eb608821",
+      "dxil_sha256": "eb6b2bd60864fbf4b32f950f4905789155c6f1793b36f50b78ac371f3240237a",
+      "dxil": "4b394390316fa4a3"
+    },
+    {
+      "file": "pass-14.spv",
+      "sha256": "35ae7b8021c2324e2c45772c861213fb1781545c5f5b7a7931e7ec293016a692",
+      "source_sha256": "1f8ec616ee2c2314175e28fa8505bcaa4bc03319091ab58aeb6171f087dbb35f",
+      "dxil_sha256": "0f44d6eaf3c6ebc462fc4c85d7f1b695cd8455983a3649939d08a89b0c10ee03",
+      "dxil": "998cf23e8597f22d"
+    }
+  ]
+}

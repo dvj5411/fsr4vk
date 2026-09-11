@@ -1,0 +1,9 @@
+{
+  "dll_sha256": "c7720bc16bede334f59a1a32cd22edbcbbb159685ed5240e61350a5fb0bc8a94",
+  "probe_sha256": "384f4fd084c2fabc8245290010d9da78363cef736048f624e893ddb8e76414d0",
+  "vkd3d_sha256": "2146f89f2c8ebd0149af4096f3b374b1cdc9fe9b5c2b43b7d61c104487aaab65",
+  "VKD3D_CONFIG": "force_raw_va_cbv",
+  "VKD3D_DISABLE_EXTENSIONS": "VK_NV_raw_access_chains",
+  "gpu": "NVIDIA GeForce RTX 3070 Ti",
+  "driver": "610.57.04"
+}

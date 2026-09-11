@@ -1,0 +1,9 @@
+device=NVIDIA GeForce RTX 3070 Ti requested_api=1.3
+descriptor_layout_sizes=512,2112,2048,embedded binding_offsets=0,64,0,embedded mutable_stride=16 concrete_sizes=8,16,4,16,4,16
+depth_target=cleanly-rejected
+dispatch=quality-frame passes=15 status=recorded
+context_frames=19 batch_size=8 overflow=rejected slot_reuse=passed temporal_frame=17 reset_frame=18
+output_fnv1a64=35c456bcdef9c48a
+output_min=0.0400390625 max=1 mean=0.416433824492 nonfinite=0
+uploaded_color_fnv1a64=a3bc93bec38580c0 expected=a3bc93bec38580c0
+output="Z:\\home\\admin\\fsr4-nvidia-test-4cde8e9\\validation\\portable-windows-nms-formats.rgba16f"

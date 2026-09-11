@@ -80,6 +80,32 @@ struct VkPhysicalDeviceDescriptorHeapFeaturesEXT
 
 namespace fsr4vk
 {
+// Shared by device negotiation and shader selection. The portable pre-pass
+// requires no VALVE capability; INT8 network shaders are identical in both paths.
+inline bool supportsNativeMixedDot(VkPhysicalDevice physical,
+                                  PFN_vkGetPhysicalDeviceFeatures2 query,
+                                  PFN_vkEnumerateDeviceExtensionProperties enumerate)
+{
+    uint32_t count = 0;
+    if (!query || !enumerate || enumerate(physical, nullptr, &count, nullptr) != VK_SUCCESS)
+        throw std::runtime_error("cannot query mixed-dot backend support");
+    std::vector<VkExtensionProperties> extensions(count);
+    if (enumerate(physical, nullptr, &count, extensions.data()) != VK_SUCCESS)
+        throw std::runtime_error("cannot enumerate mixed-dot backend support");
+    extensions.resize(count);
+    if (std::none_of(extensions.begin(), extensions.end(), [](const auto& extension) {
+            return std::strcmp(extension.extensionName,
+                               VK_VALVE_SHADER_MIXED_FLOAT_DOT_PRODUCT_EXTENSION_NAME) == 0;
+        }))
+        return false;
+    VkPhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE mixed {};
+    mixed.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MIXED_FLOAT_DOT_PRODUCT_FEATURES_VALVE;
+    VkPhysicalDeviceFeatures2 features { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+    features.pNext = &mixed;
+    query(physical, &features);
+    return mixed.shaderMixedFloatDotProductFloat16AccFloat32 == VK_TRUE;
+}
+
 // Owns copies: never modifies the application's const pNext chain. Unknown
 // structures are rejected, not silently dropped or guessed. Keep alive through
 // vkCreateDevice. Only used by the explicitly opted-in experimental path.
@@ -108,6 +134,8 @@ class DeviceFeatures
             FSR4_COPY(VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
             FSR4_COPY(VkPhysicalDeviceVulkan13Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES);
             FSR4_COPY(VkPhysicalDeviceVulkan14Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES);
+            FSR4_COPY(VkPhysicalDeviceDynamicRenderingFeatures,
+                      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES);
             FSR4_COPY(VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR,
                       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR);
             FSR4_COPY(VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT,
@@ -329,9 +357,9 @@ class DeviceFeatures
         requireFeature(mutableType.mutableDescriptorType, "mutableDescriptorType");
         requireFeature(descriptors.descriptorBuffer, "descriptorBuffer");
         requireFeature(derivatives.computeDerivativeGroupLinear, "computeDerivativeGroupLinear");
-        requireFeature(mixed.shaderMixedFloatDotProductFloat16AccFloat32,
-                       "shaderMixedFloatDotProductFloat16AccFloat32");
-        requireFeature(floatControls.shaderFloatControls2, "shaderFloatControls2");
+        const bool nativeMixedDot = supportsNativeMixedDot(physical, query, enumerate);
+        if (nativeMixedDot)
+            requireFeature(floatControls.shaderFloatControls2, "shaderFloatControls2");
         if (!missingFeatures.empty())
         {
             std::string message = "missing FSR4 device feature(s): ";
@@ -354,11 +382,13 @@ class DeviceFeatures
             if (std::none_of(extensions.begin(), extensions.end(),
                              [&](auto* e) { return std::strcmp(e, source.ppEnabledExtensionNames[i]) == 0; }))
                 extensions.push_back(source.ppEnabledExtensionNames[i]);
-        std::vector<const char*> requiredExtensions { VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME,
-                                                      VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
+        std::vector<const char*> requiredExtensions { VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
                                                       VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME,
-                                                      VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,
-                                                      VK_VALVE_SHADER_MIXED_FLOAT_DOT_PRODUCT_EXTENSION_NAME };
+                                                      VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME };
+        if (nativeMixedDot) {
+            requiredExtensions.push_back(VK_VALVE_SHADER_MIXED_FLOAT_DOT_PRODUCT_EXTENSION_NAME);
+            requiredExtensions.push_back(VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME);
+        }
         if (!core12)
         {
             requiredExtensions.insert(requiredExtensions.end(),
@@ -473,15 +503,18 @@ class DeviceFeatures
         ensure<VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR>(
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR)
             ->computeDerivativeGroupLinear = VK_TRUE;
-        ensure<VkPhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE>(
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MIXED_FLOAT_DOT_PRODUCT_FEATURES_VALVE)
-            ->shaderMixedFloatDotProductFloat16AccFloat32 = VK_TRUE;
-        if (auto* e14 = find<VkPhysicalDeviceVulkan14Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES))
-            e14->shaderFloatControls2 = VK_TRUE;
-        else
-            ensure<VkPhysicalDeviceShaderFloatControls2FeaturesKHR>(
-                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT_CONTROLS_2_FEATURES_KHR)
-                ->shaderFloatControls2 = VK_TRUE;
+        if (nativeMixedDot)
+            ensure<VkPhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE>(
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MIXED_FLOAT_DOT_PRODUCT_FEATURES_VALVE)
+                ->shaderMixedFloatDotProductFloat16AccFloat32 = VK_TRUE;
+        if (nativeMixedDot) {
+            if (auto* e14 = find<VkPhysicalDeviceVulkan14Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES))
+                e14->shaderFloatControls2 = VK_TRUE;
+            else
+                ensure<VkPhysicalDeviceShaderFloatControls2FeaturesKHR>(
+                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT_CONTROLS_2_FEATURES_KHR)
+                    ->shaderFloatControls2 = VK_TRUE;
+        }
     }
     DeviceFeatures(const DeviceFeatures&) = delete;
     DeviceFeatures& operator=(const DeviceFeatures&) = delete;

@@ -6,26 +6,40 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import importlib.util
+
+spec = importlib.util.spec_from_file_location('portable_assets', Path(__file__).with_name('portable-assets.py'))
+portable_assets = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(portable_assets)
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('general', type=Path)
 p.add_argument('output', type=Path)
 a = p.parse_args()
 subprocess.run([sys.executable, str(Path(__file__).with_name('verify-general-assets.py')), str(a.general)], check=True)
+portable_root = a.general.parent/'portable'
+print(f'Verified {portable_assets.verify(a.general, portable_root)} portable shaders.')
 a.output.mkdir(parents=True, exist_ok=True)
 resources, index, entries = {}, [], []
+def add_resource(path, key, payload):
+    digest = hashlib.sha256(payload).hexdigest()
+    if digest not in resources:
+        resources[digest] = (len(resources)+100, path.resolve())
+    rid = resources[digest][0]
+    index.append(f'    {{{json.dumps(key)}, {rid}, {len(payload)}}},')
+    entries.append(dict(path=key, resource_id=rid, size=len(payload), sha256=digest))
+
 for manifest in sorted(a.general.glob('*/*/manifest.json')):
     data = json.loads(manifest.read_text())
     for name in [s['file'] for s in data['shaders']] + ['initializers.bin', 'weights.bin']:
         path = manifest.parent/name
         payload = path.read_bytes()
-        digest = hashlib.sha256(payload).hexdigest()
-        if digest not in resources:
-            resources[digest] = (len(resources)+100, path.resolve())
-        rid = resources[digest][0]
         key = 'general/'+path.relative_to(a.general).as_posix()
-        index.append(f'    {{{json.dumps(key)}, {rid}, {len(payload)}}},')
-        entries.append(dict(path=key, resource_id=rid, size=len(payload), sha256=digest))
+        add_resource(path, key, payload)
+        if name.endswith('.spv'):
+            portable_path = portable_root/path.relative_to(a.general)
+            portable = portable_path.read_bytes()
+            add_resource(portable_path, key[:-4]+'.portable.spv', portable)
 (a.output/'embedded-assets.rc').write_text('\n'.join(f'{rid} RCDATA {json.dumps(str(path))}' for rid,path in resources.values())+'\n')
 (a.output/'embedded-asset-index.hpp').write_text(
     '#pragma once\nnamespace fsr4assets {\nstruct EmbeddedEntry { const char* path; unsigned id; unsigned size; };\n'

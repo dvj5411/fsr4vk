@@ -3,6 +3,7 @@
 #include "quality-recorder.hpp"
 #include "embedded-assets.hpp"
 #include "vulkan-compat.hpp"
+#include "../provider/vulkan_device_features.hpp"
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>
@@ -229,6 +230,7 @@ class QualityContext {
     std::vector<uint8_t> weights;
     bool initialized = false;
     bool nms_inputs = false;
+    bool native_mixed_dot = false;
     VkQueryPool profile_queries{};
     double timestamp_period = 0;
     std::string profile_path;
@@ -276,6 +278,9 @@ class QualityContext {
         for (auto& b : buffers) destroy_buffer(device,b);
     }
 public:
+    const char* shader_backend() const {
+        return native_mixed_dot ? "native-mixed-dot" : "portable-int8";
+    }
     QualityContext(const QualityContext&) = delete;
     QualityContext& operator=(const QualityContext&) = delete;
     QualityContext(VkPhysicalDevice physical, VkDevice logical, const fs::path& shader_dir,
@@ -290,6 +295,8 @@ public:
           get_device_proc_addr(get_device_proc_addr),
           dispatch(logical, get_device_proc_addr, api_version), nms_inputs(nms) {
       try {
+        native_mixed_dot = fsr4vk::supportsNativeMixedDot(
+            physical, vkGetPhysicalDeviceFeatures2, vkEnumerateDeviceExtensionProperties);
         if (const char* path=std::getenv("FSR4_VK_PROFILE_PATH")) {
             VkPhysicalDeviceProperties properties{};
             vkGetPhysicalDeviceProperties(physical_device,&properties);
@@ -424,8 +431,10 @@ public:
         for (const auto& pass : selected_passes) {
             const auto index=unsigned(&pass-selected_passes.data());
             const auto canonical=index==14 ? 0u : index+1;
-            const auto name=general_bundle ? "pass-"+std::string(canonical<10 ? "0" : "")+std::to_string(canonical)+".spv"
+            auto name=general_bundle ? "pass-"+std::string(canonical<10 ? "0" : "")+std::to_string(canonical)+".spv"
                                            : std::string(pass.hash)+".spv";
+            if (!native_mixed_dot)
+                name.insert(name.size() - 4, ".portable");
             const auto code = read_spirv(shader_dir / name);
             VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
             module_info.codeSize = code.size() * sizeof(std::uint32_t);

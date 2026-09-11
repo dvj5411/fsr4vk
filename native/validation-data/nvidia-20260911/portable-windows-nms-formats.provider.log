@@ -1,0 +1,7 @@
+context created flags=41 api=1.1
+FSR4 Vulkan dispatch rejected: unsupported depth resource
+shader_backend=portable-int8
+first dispatch recorded: 1280x720 -> 1920x1080
+motion scale API=1.000000,1.000000 shader=0.000781,0.001389
+FSR4 Vulkan dispatch failed: Quality context has eight frames still in flight
+FSR4 Vulkan dispatch failed: Quality context has eight frames still in flight
