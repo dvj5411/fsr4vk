@@ -509,6 +509,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
             provider->last_output_width=ow;provider->last_output_height=oh;
         }
         if (provider->first_dispatch) {
+            diagnostic(*provider, std::string("shader_backend=") + core->shader_backend());
             diagnostic(*provider,"first dispatch recorded: "+std::to_string(rw)+"x"+
                 std::to_string(rh)+" -> "+std::to_string(ow)+"x"+std::to_string(oh));
             diagnostic(*provider,"motion scale API="+std::to_string(d.motionVectorScale.x)+","+
