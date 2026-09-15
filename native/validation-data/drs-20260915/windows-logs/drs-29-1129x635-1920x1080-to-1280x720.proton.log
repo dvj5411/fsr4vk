@@ -1,0 +1,9 @@
+INFO: umu-launcher version 1.4.4 (3.14.7 (main, Aug 10 2026, 00:00:00) [GCC 16.1.1 20260515 (Red Hat 16.1.1-2)])
+WARNING: Executable not found: cmd.exe
+INFO: Running 'GE-Proton11-5-x86_64' using runtime 'steamrt4'
+INFO: Running 'steamrt4' using runtime 'host'
+ProtonFixes[50136] WARN: Skipping fix execution. We are probably running a unit test.
+Proton: Error: unable to use parent for game drive, path
+ProtonFixes[50136] WARN: Skipping fix execution. We are probably running a unit test.
+Proton: Executable is inside wine prefix, launching normally.
+ntsync: up and running.

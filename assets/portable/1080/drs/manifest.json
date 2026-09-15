@@ -1,0 +1,124 @@
+{
+  "schema": 1,
+  "capacity": [
+    1920,
+    1080
+  ],
+  "preset": "drs",
+  "shaders": [
+    {
+      "file": "pass-00.spv",
+      "sha256": "d6a01100a56327713d2f7c1a768e41f8a31f2cadce5f37b7dac81630722ff5a2",
+      "source_sha256": "d6a01100a56327713d2f7c1a768e41f8a31f2cadce5f37b7dac81630722ff5a2",
+      "dxil_sha256": "ebd1c205f6480548b3a039abd3c63b909ff61b2e51d96ccc5068eca11817105d",
+      "dxil": "996136f00380aba8"
+    },
+    {
+      "file": "pass-01.spv",
+      "sha256": "b71d19842215003c763b0aad917ef195bc86624d7022b9213d19e9794b28d269",
+      "source_sha256": "e5d31d5e1e340317eba331c5d5bee61a70822b31e85fa0bd51874c0a6b3af59e",
+      "dxil_sha256": "12449c2fe2cb72211f149d187732553d49060936b146001d68c27ceee5c03706",
+      "dxil": "2db3091fa1d5cca9"
+    },
+    {
+      "file": "pass-02.spv",
+      "sha256": "76c0948770914264aecd0d42d404c7114df7040d95d6aaa4049e3f4695134dc8",
+      "source_sha256": "76c0948770914264aecd0d42d404c7114df7040d95d6aaa4049e3f4695134dc8",
+      "dxil_sha256": "b1995cfe7035c6181a2cf63198a5774611075e59521ff0bde6d88588014c2edb",
+      "dxil": "8da6fb1bff747195"
+    },
+    {
+      "file": "pass-03.spv",
+      "sha256": "1e3058ad7f9dd218f6c42960fd8814b00e4d789959c874fa34cf663f1c9e29a9",
+      "source_sha256": "1e3058ad7f9dd218f6c42960fd8814b00e4d789959c874fa34cf663f1c9e29a9",
+      "dxil_sha256": "76409aeda2740e6f7b3650f760ec2da3196bb41cebe696f17303da69f75fca26",
+      "dxil": "d7f19fb81b82e3f3"
+    },
+    {
+      "file": "pass-04.spv",
+      "sha256": "29122e287a039a54c4d3ffd2a4aa7eea51caee80b0386070a723958e4eed39bc",
+      "source_sha256": "29122e287a039a54c4d3ffd2a4aa7eea51caee80b0386070a723958e4eed39bc",
+      "dxil_sha256": "dcf9a3466655fb986f0f6a85f7411e7f099f813da90a65b5879bd009ac0d6ae1",
+      "dxil": "6bc245fa37477c8f"
+    },
+    {
+      "file": "pass-05.spv",
+      "sha256": "1558452e28efc3dc4f0ac2856ef92bc197e3d9c51dc6a346d79ac5dd04d7e6b9",
+      "source_sha256": "1558452e28efc3dc4f0ac2856ef92bc197e3d9c51dc6a346d79ac5dd04d7e6b9",
+      "dxil_sha256": "d7c2f7f506900dc761dc2601a494f6197b3aea472ca49546fe3d3deff2215f7d",
+      "dxil": "0f948d679ee6bafe"
+    },
+    {
+      "file": "pass-06.spv",
+      "sha256": "37a22eaa2692cb28c780f000ed00c7ed23009df5ca23e2e498f7542b36c30dc0",
+      "source_sha256": "37a22eaa2692cb28c780f000ed00c7ed23009df5ca23e2e498f7542b36c30dc0",
+      "dxil_sha256": "964d357bcd4c09fbdd92167da188322356eb5654848c7b17e49ac9f8f7559260",
+      "dxil": "b9afdab5dd833ad8"
+    },
+    {
+      "file": "pass-07.spv",
+      "sha256": "25292bcdccb2a7a1a7859660cb0e2091413fc041caafee41fba9f0cd6a6f1941",
+      "source_sha256": "25292bcdccb2a7a1a7859660cb0e2091413fc041caafee41fba9f0cd6a6f1941",
+      "dxil_sha256": "5f6495ef9a7a34e4b2117dee64dba70a7c1539c15e64267a42245f6aca854ad3",
+      "dxil": "45546480a3a11684"
+    },
+    {
+      "file": "pass-08.spv",
+      "sha256": "22239d23849e413c7868f4c49a5b3fbd117a6dc2103f6533be1bc28423c71a29",
+      "source_sha256": "22239d23849e413c7868f4c49a5b3fbd117a6dc2103f6533be1bc28423c71a29",
+      "dxil_sha256": "21059b5f93a41d41542a8f93cf34f0ff6e8b080fae5bb38577e9a30c7739cbfd",
+      "dxil": "f513feeeee3fe067"
+    },
+    {
+      "file": "pass-09.spv",
+      "sha256": "83a2ab19c042b77e193922ff39c70051fed861f0d54f47be49f10555ab33c8fd",
+      "source_sha256": "83a2ab19c042b77e193922ff39c70051fed861f0d54f47be49f10555ab33c8fd",
+      "dxil_sha256": "7b19361f80d60606741afedc86e99a7ec4a04f0ffede38b109ea5e326cb81e9b",
+      "dxil": "be2b27886cc6227a"
+    },
+    {
+      "file": "pass-10.spv",
+      "sha256": "c7d5779891d1038671526d0f552ebe239f6153e9366ea1c56488823aeeb29d84",
+      "source_sha256": "c7d5779891d1038671526d0f552ebe239f6153e9366ea1c56488823aeeb29d84",
+      "dxil_sha256": "5911a408e427acc6fedcab70e47820ffbea42b01eeea8f296f75189174ba335f",
+      "dxil": "6c71097be9316941"
+    },
+    {
+      "file": "pass-11.spv",
+      "sha256": "dd3d4a9e6f3a8d542237f3a817385682644bce91cb4605183dbcc1a767954ae3",
+      "source_sha256": "dd3d4a9e6f3a8d542237f3a817385682644bce91cb4605183dbcc1a767954ae3",
+      "dxil_sha256": "de19ea742d46d006370d22336f0c2449349f13d9fdf7428412679a6ca67218ba",
+      "dxil": "944937fb50352c5f"
+    },
+    {
+      "file": "pass-12.spv",
+      "sha256": "d6e320dce51ae0332b70b247a005d06674d6bfc384a1457da58ee26d58821517",
+      "source_sha256": "d6e320dce51ae0332b70b247a005d06674d6bfc384a1457da58ee26d58821517",
+      "dxil_sha256": "d76d16c343346005b67bfb1f3da970fa403e77e095b3ef8e42d84c2e69411dbb",
+      "dxil": "d1053286a4fd7791"
+    },
+    {
+      "file": "pass-13.spv",
+      "sha256": "4917d7316a40bf7f2a6ab96c2092a4cbd8536bd3a04d91a4b5142e82dc09b364",
+      "source_sha256": "4917d7316a40bf7f2a6ab96c2092a4cbd8536bd3a04d91a4b5142e82dc09b364",
+      "dxil_sha256": "bcaa596d3f78659ae1bfdbf68bf9d4c371b73715af3398952e6c43d97c186f80",
+      "dxil": "832b861769c77454"
+    },
+    {
+      "file": "pass-14.spv",
+      "sha256": "5a68135905e4d01b327cadd33bd1c00f98ef57c5852bea96204dc8c4d6871147",
+      "source_sha256": "5a68135905e4d01b327cadd33bd1c00f98ef57c5852bea96204dc8c4d6871147",
+      "dxil_sha256": "6f134b623a1044a6884c16b207b6400dce1f1c861085aada75a3bc8760600df1",
+      "dxil": "7153b4bdce12f21c"
+    }
+  ],
+  "provenance": {
+    "dll_sha256": "c7720bc16bede334f59a1a32cd22edbcbbb159685ed5240e61350a5fb0bc8a94",
+    "probe_sha256": "02ad2899edde5ce70f10f5ff77980395ceb9a34114081ff5ca0511bef192d028",
+    "vkd3d_sha256": "68b8bc7b32f9b1b1b0526e9e2e769731dd8da9af0f2b40f76012385b9d5721df",
+    "VKD3D_CONFIG": "force_raw_va_cbv",
+    "VKD3D_DISABLE_EXTENSIONS": "VK_VALVE_shader_mixed_float_dot_product,VK_KHR_shader_float_controls2,VK_NV_raw_access_chains",
+    "gpu": "AMD Radeon Pro W6400",
+    "driver": "Mesa 26.2.2"
+  }
+}

@@ -1,0 +1,1228 @@
+{
+  "cases": [
+    {
+      "case": "drs-00-1280x720-1280x720",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-00-1280x720-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00015381724459004,
+          "max_abs_error": 0.03759765625,
+          "above_tolerance_fraction": 0.0021305338541667,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-00-1280x720-1280x720.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-01-853x480-1280x720",
+      "input": [
+        853,
+        480
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-01-853x480-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.000202031604185,
+          "max_abs_error": 0.09326171875,
+          "above_tolerance_fraction": 0.0028868272569444,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-01-853x480-1280x720.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-02-752x423-1280x720",
+      "input": [
+        752,
+        423
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-02-752x423-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00022938383867142,
+          "max_abs_error": 0.06640625,
+          "above_tolerance_fraction": 0.0025664605034722,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-02-752x423-1280x720.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-03-640x360-1280x720",
+      "input": [
+        640,
+        360
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-03-640x360-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00031496681269976,
+          "max_abs_error": 0.068359375,
+          "above_tolerance_fraction": 0.002666015625,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-03-640x360-1280x720.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-04-426x240-1280x720",
+      "input": [
+        426,
+        240
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-04-426x240-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00096616948351081,
+          "max_abs_error": 0.1640625,
+          "above_tolerance_fraction": 0.0045282660590278,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-04-426x240-1280x720.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-05-1920x1080-1920x1080",
+      "input": [
+        1920,
+        1080
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-05-1920x1080-1920x1080/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00045144018948965,
+          "max_abs_error": 0.397216796875,
+          "above_tolerance_fraction": 0.0013961226851852,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00079007159442376,
+          "max_abs_error": 0.316650390625,
+          "above_tolerance_fraction": 0.0037771267361111,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-05-1920x1080-1920x1080.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-06-1280x720-1920x1080",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-06-1280x720-1920x1080/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00059926054240678,
+          "max_abs_error": 0.37841796875,
+          "above_tolerance_fraction": 0.0015446566358025,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00083165113054381,
+          "max_abs_error": 0.37548828125,
+          "above_tolerance_fraction": 0.0033838493441358,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-06-1280x720-1920x1080.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-07-1129x635-1920x1080",
+      "input": [
+        1129,
+        635
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-07-1129x635-1920x1080/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00062396014800237,
+          "max_abs_error": 0.44921875,
+          "above_tolerance_fraction": 0.0011208767361111,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0013492993907929,
+          "max_abs_error": 0.4278564453125,
+          "above_tolerance_fraction": 0.0029566936728395,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-07-1129x635-1920x1080.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-08-960x540-1920x1080",
+      "input": [
+        960,
+        540
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-08-960x540-1920x1080/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.001932833355729,
+          "max_abs_error": 0.58203125,
+          "above_tolerance_fraction": 0.0015206645447531,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0013637205082013,
+          "max_abs_error": 0.525146484375,
+          "above_tolerance_fraction": 0.0028267264660494,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-08-960x540-1920x1080.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-09-640x360-1920x1080",
+      "input": [
+        640,
+        360
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-09-640x360-1920x1080/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00062522448031022,
+          "max_abs_error": 0.3759765625,
+          "above_tolerance_fraction": 0.00070469232253086,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0010740953904439,
+          "max_abs_error": 0.455810546875,
+          "above_tolerance_fraction": 0.0022206548996914,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-09-640x360-1920x1080.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-10-2560x1440-2560x1440",
+      "input": [
+        2560,
+        1440
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-10-2560x1440-2560x1440/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 6.8291344178186e-05,
+          "max_abs_error": 0.015625,
+          "above_tolerance_fraction": 0.00078850640190972,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-10-2560x1440-2560x1440.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-11-1706x960-2560x1440",
+      "input": [
+        1706,
+        960
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-11-1706x960-2560x1440/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 7.0422469164222e-05,
+          "max_abs_error": 0.027099609375,
+          "above_tolerance_fraction": 0.00067681206597222,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-11-1706x960-2560x1440.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-12-1505x847-2560x1440",
+      "input": [
+        1505,
+        847
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-12-1505x847-2560x1440/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 7.939876519723e-05,
+          "max_abs_error": 0.0186767578125,
+          "above_tolerance_fraction": 0.00070488823784722,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-12-1505x847-2560x1440.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-13-1280x720-2560x1440",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-13-1280x720-2560x1440/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 6.9939456123031e-05,
+          "max_abs_error": 0.018798828125,
+          "above_tolerance_fraction": 0.00055616590711806,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-13-1280x720-2560x1440.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-14-853x480-2560x1440",
+      "input": [
+        853,
+        480
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-14-853x480-2560x1440/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 9.5451410723465e-05,
+          "max_abs_error": 0.034912109375,
+          "above_tolerance_fraction": 0.00053236219618056,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-14-853x480-2560x1440.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-15-3840x2160-3840x2160",
+      "input": [
+        3840,
+        2160
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-15-3840x2160-3840x2160/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-15-3840x2160-3840x2160.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-16-2560x1440-3840x2160",
+      "input": [
+        2560,
+        1440
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-16-2560x1440-3840x2160/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-16-2560x1440-3840x2160.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-17-2258x1270-3840x2160",
+      "input": [
+        2258,
+        1270
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-17-2258x1270-3840x2160/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-17-2258x1270-3840x2160.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-18-1920x1080-3840x2160",
+      "input": [
+        1920,
+        1080
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-18-1920x1080-3840x2160/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-18-1920x1080-3840x2160.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-19-1280x720-3840x2160",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-19-1280x720-3840x2160/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-19-1280x720-3840x2160.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-20-853x479-1279x719",
+      "input": [
+        853,
+        479
+      ],
+      "output": [
+        1279,
+        719
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-20-853x479-1279x719/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 3678404,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 3678404,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00018100211120332,
+          "max_abs_error": 0.04345703125,
+          "above_tolerance_fraction": 0.0028156232974953,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-20-853x479-1279x719.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-21-1280x720-1921x1081",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1921,
+        1081
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-21-1280x720-1921x1081/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 8306404,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8306404,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0001345918451104,
+          "max_abs_error": 0.07275390625,
+          "above_tolerance_fraction": 0.0012597509102615,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-21-1280x720-1921x1081.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-22-900x500-1344x752",
+      "input": [
+        900,
+        500
+      ],
+      "output": [
+        1344,
+        752
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-22-900x500-1344x752/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 4042752,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 4042752,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0003147497427712,
+          "max_abs_error": 0.17041015625,
+          "above_tolerance_fraction": 0.0031869380065856,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-22-900x500-1344x752.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-23-64x64-128x128",
+      "input": [
+        64,
+        64
+      ],
+      "output": [
+        128,
+        128
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-23-64x64-128x128/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "frames": [
+        {
+          "values": 65536,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 65536,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-23-64x64-128x128.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-24-640x360-1920x1080-to-960x540",
+      "input": [
+        640,
+        360
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-24-640x360-1920x1080-to-960x540/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "second_input": [
+        960,
+        540
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00092290409678157,
+          "max_abs_error": 0.625244140625,
+          "above_tolerance_fraction": 0.00061619888117284,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.000743976837589,
+          "max_abs_error": 0.3338623046875,
+          "above_tolerance_fraction": 0.015787037037037,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-24-640x360-1920x1080-to-960x540.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-25-960x540-1920x1080-to-640x360",
+      "input": [
+        960,
+        540
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-25-960x540-1920x1080-to-640x360/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "second_input": [
+        640,
+        360
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0012744323876106,
+          "max_abs_error": 0.6431884765625,
+          "above_tolerance_fraction": 0.0015791377314815,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0016721038809552,
+          "max_abs_error": 0.60302734375,
+          "above_tolerance_fraction": 0.017173152970679,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-25-960x540-1920x1080-to-640x360.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-26-1280x720-3840x2160-to-1920x1080",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-26-1280x720-3840x2160-to-1920x1080/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "second_input": [
+        1920,
+        1080
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-26-1280x720-3840x2160-to-1920x1080.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-27-1920x1080-3840x2160-to-1280x720",
+      "input": [
+        1920,
+        1080
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-27-1920x1080-3840x2160-to-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "second_input": [
+        1280,
+        720
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-27-1920x1080-3840x2160-to-1280x720.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-28-1280x720-1920x1080-to-1129x635",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-28-1280x720-1920x1080-to-1129x635/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "second_input": [
+        1129,
+        635
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00077653936135173,
+          "max_abs_error": 0.271728515625,
+          "above_tolerance_fraction": 0.0019871238425926,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00091239462583036,
+          "max_abs_error": 0.443603515625,
+          "above_tolerance_fraction": 0.0068354552469136,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-28-1280x720-1920x1080-to-1129x635.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    },
+    {
+      "case": "drs-29-1129x635-1920x1080-to-1280x720",
+      "input": [
+        1129,
+        635
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-portable-matrix-v1-drs-29-1129x635-1920x1080-to-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "second_input": [
+        1280,
+        720
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0008014354782136,
+          "max_abs_error": 0.44921875,
+          "above_tolerance_fraction": 0.0012198591820988,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00099223667939446,
+          "max_abs_error": 0.48583984375,
+          "above_tolerance_fraction": 0.013624734760802,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "candidate": "build/drs-matrix-portable-v2/drs-29-1129x635-1920x1080-to-1280x720.rgba16f",
+      "backend": "portable-int8",
+      "status": "passed"
+    }
+  ]
+}

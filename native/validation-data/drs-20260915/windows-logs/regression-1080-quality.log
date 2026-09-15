@@ -1,0 +1,9 @@
+device=AMD Radeon Pro W6400 (RADV NAVI24) requested_api=1.3
+descriptor_layout_sizes=2048,8256,8192,embedded binding_offsets=0,64,0,embedded mutable_stride=64 concrete_sizes=16,16,64,16,32,16
+depth_target=cleanly-rejected
+dispatch=quality-frame passes=15 status=recorded
+context_frames=2 moving_reference_frame=1 reset=false
+output_fnv1a64=864144627acedd59
+output_min=0.0400695800781 max=0.966796875 mean=0.229771034129 nonfinite=0
+uploaded_color_fnv1a64=4033612e975ad548 expected=4033612e975ad548
+output="Z:\\var\\home\\admin\\fsr4-drs-20260915\\build\\drs-windows-validation-v1\\regression-1080-quality.rgba16f"

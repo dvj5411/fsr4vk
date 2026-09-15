@@ -1,4 +1,4 @@
-EXPERIMENTAL FSR4.0.2 VK IMPLEMENTATION — RELEASE 0.3.2.1
+EXPERIMENTAL FSR4.0.2 VK IMPLEMENTATION — RELEASE 0.3.2.2
 THINGS WILL BREAK! IF YOU FIND A PROBLEM, @de_w23 ON THE OPTISCALER DISCORD!
 
 Requirements:
@@ -13,6 +13,7 @@ Instructions on usage:
 3. Put amd_fidelityfx_upscaler_vk.dll in the /<game folder location>/OptiScaler/ folder.
 4. FSR4_VK_ENABLE_DEVICE_FEATURES=1 is redundant with this build and may be removed from the launch args.
 5. Select the FSR 3.X/FFX backend and then the FSR 4.0.2c Vulkan provider.
+6. With the included OptiScaler build, leave the preset at Auto or force presets 0–5. Preset 4 uses the DRS model. Preset selection does not change the game's render resolution.
 
 Experimental direct drop-in:
 The self-contained upscaler DLL may theoretically be renamed to amd_fidelityfx_vk.dll and used without the custom OptiScaler build. Back up the original DLL first.

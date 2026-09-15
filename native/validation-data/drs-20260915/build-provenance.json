@@ -1,0 +1,28 @@
+{
+  "base_commit": "c1e0c7d2cb6b058d2244273f3b246b1f2c7e5cf1",
+  "branch": "codex/preset-4-drs",
+  "source_sha256": {
+    "provider/ffx_vk_provider.cpp": "9585b056bacab9e883ecc42b32d368b28d5d2ad30c55785c5d312e8ee41d876e",
+    "native/resolution-plan.hpp": "fb49c603f91b6faccd094c4b2be06edc9447122ab90e9a366531de2ed5b6fcad",
+    "native/quality-context.hpp": "6324658f028e335b9ec686fbfaa11e1a62c114444db31c9f1ef6245d00a3942e",
+    "native/dispatch-smoke.cpp": "7a8bcb1e9f529f82d7894c999ba3f84b30ae3bc5a3fbb91af85fb50ee8ab8488",
+    "probes/provider-probe.cpp": "0f28ea63e5cddff8b534b1329939074ca41633a0ad3a6c46a36e812428dc58e3"
+  },
+  "artifacts": {
+    "amd_fidelityfx_upscaler_vk.dll": {
+      "sha256": "171fc2f8675c0bf144239b6ab27954c25ddb25c8e28e592882592cf488548e37",
+      "bytes": 77521450
+    },
+    "amd_fidelityfx_vk.dll": {
+      "sha256": "171fc2f8675c0bf144239b6ab27954c25ddb25c8e28e592882592cf488548e37",
+      "bytes": 77521450
+    },
+    "provider-dispatch-smoke.exe": {
+      "sha256": "97cfcc17bff6c114c0674df2ea1482970884c6a52ef4e222e3f543d33689374f",
+      "bytes": 16965522
+    }
+  },
+  "embedded_paths": 384,
+  "unique_resources": 323,
+  "compiler": "x86_64-w64-mingw32-g++ (GCC) 16.2.0"
+}

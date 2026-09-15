@@ -1,0 +1,205 @@
+diff --git a/OptiScaler/upscalers/ffx/FFXFeature_Vk.cpp b/OptiScaler/upscalers/ffx/FFXFeature_Vk.cpp
+index bc6a4733..7c1b8eaa 100644
+--- a/OptiScaler/upscalers/ffx/FFXFeature_Vk.cpp
++++ b/OptiScaler/upscalers/ffx/FFXFeature_Vk.cpp
+@@ -3,6 +3,7 @@
+ #include <Util.h>
+ #include <proxies/FfxApi_Proxy.h>
+ #include "FFXFeature_Vk.h"
++#include "FFXVkPresetReporting.h"
+ #include "nvsdk_ngx_vk.h"
+ #include "MathUtils.h"
+ 
+@@ -141,6 +142,9 @@ bool FFXFeatureVk::InitFFX(const NVSDK_NGX_Parameter* InParameters)
+     if (IsInited())
+         return true;
+ 
++    State::Instance().currentFsr4Preset.reset();
++    _presetQuerySupported = true;
++
+     if (PhysicalDevice == nullptr)
+     {
+         LOG_ERROR("PhysicalDevice is null!");
+@@ -185,6 +189,20 @@ bool FFXFeatureVk::InitFFX(const NVSDK_NGX_Parameter* InParameters)
+         }
+     }
+ 
++    const auto supportedPresets = FFXVkPresetReporting::SupportedPresets(FfxApiProxy::VULKAN_Query(), &_context);
++    const auto requestedPreset = Config::Instance()->Fsr4Preset.has_value()
++                                     ? Config::Instance()->Fsr4Preset.value() : FSR4VK_PRESET_AUTO;
++    if (supportedPresets.has_value())
++    {
++        const auto result = FFXVkPresetReporting::Apply(FfxApiProxy::VULKAN_Configure(), &_context,
++                                                       *supportedPresets, requestedPreset);
++        if (result != FFX_API_RETURN_OK)
++            LOG_WARN("Vulkan FSR4 preset {} rejected; new context remains Auto ({})", requestedPreset,
++                     FfxApiProxy::ReturnCodeToString(result));
++    }
++    else if (requestedPreset != FSR4VK_PRESET_AUTO)
++        LOG_WARN("Vulkan FSR4 provider does not advertise preset forcing; using provider default");
++
+     auto version = State::Instance().ffxUpscalerVersionNames[Config::Instance()->FfxUpscalerIndex.value_or_default()];
+     _name = "FSR";
+     parse_version(version);
+@@ -208,6 +226,8 @@ bool FFXFeatureVk::EvaluateInternal(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Param
+ {
+     LOG_FUNC();
+ 
++    FFXVkPresetReporting::DispatchReport presetReport { State::Instance().currentFsr4Preset };
++
+     if (!IsInited())
+         return false;
+ 
+@@ -543,5 +563,8 @@ bool FFXFeatureVk::EvaluateInternal(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Param
+         return false;
+     }
+ 
++    presetReport.activePreset =
++        FFXVkPresetReporting::Read(FfxApiProxy::VULKAN_Query(), &_context, _presetQuerySupported);
++
+     return true;
+ }
+diff --git a/OptiScaler/upscalers/ffx/FFXFeature_Vk.h b/OptiScaler/upscalers/ffx/FFXFeature_Vk.h
+index eb58f095..d888a9e8 100644
+--- a/OptiScaler/upscalers/ffx/FFXFeature_Vk.h
++++ b/OptiScaler/upscalers/ffx/FFXFeature_Vk.h
+@@ -8,6 +8,7 @@
+ class FFXFeatureVk : public FFXFeature, public IFeature_Vk
+ {
+   private:
++    bool _presetQuerySupported = true;
+   protected:
+     bool InitFFX(const NVSDK_NGX_Parameter* InParameters);
+ 
+diff --git a/OptiScaler/upscalers/ffx/FFXVkPresetReporting.h b/OptiScaler/upscalers/ffx/FFXVkPresetReporting.h
+new file mode 100644
+index 00000000..fbdd27e0
+--- /dev/null
++++ b/OptiScaler/upscalers/ffx/FFXVkPresetReporting.h
+@@ -0,0 +1,76 @@
++#pragma once
++
++#include "ffx_vk_preset_query.h"
++#include <optional>
++
++namespace FFXVkPresetReporting
++{
++// Wire return code from newer FFX SDKs; older SDK headers omit its enum name.
++constexpr ffxReturnCode_t ProviderNoSupportNewDescriptor = 7;
++inline std::optional<uint32_t> SupportedPresets(PfnFfxQuery query, ffxContext* context)
++{
++    if (query == nullptr || context == nullptr || *context == nullptr)
++        return std::nullopt;
++    Fsr4VkQueryPresetCapabilities desc {};
++    desc.header.type = FSR4VK_QUERY_DESC_TYPE_PRESET_CAPABILITIES;
++    if (query(context, &desc.header) != FFX_API_RETURN_OK || desc.forcedPresetMask == 0 ||
++        (desc.forcedPresetMask & ~0x3fu) != 0)
++        return std::nullopt;
++    return desc.forcedPresetMask;
++}
++
++inline bool CanForce(uint32_t mask, uint32_t preset)
++{
++    return preset == FSR4VK_PRESET_AUTO || (preset < 32 && (mask & (1u << preset)) != 0);
++}
++
++inline ffxReturnCode_t Apply(PfnFfxConfigure configure, ffxContext* context,
++                            uint32_t mask, uint32_t preset)
++{
++    if (configure == nullptr || context == nullptr || *context == nullptr || !CanForce(mask, preset))
++        return FFX_API_RETURN_ERROR_PARAMETER;
++    Fsr4VkConfigurePreset desc {};
++    desc.header.type = FSR4VK_CONFIGURE_DESC_TYPE_PRESET;
++    desc.preset = preset;
++    return configure(context, &desc.header);
++}
++
++// Publish once when EvaluateInternal returns. Early exits clear the old value
++// without making the label flicker to "Failed to hook" during every dispatch.
++struct DispatchReport
++{
++    std::optional<uint32_t>& destination;
++    std::optional<uint32_t> activePreset {};
++    ~DispatchReport() { destination = activePreset; }
++};
++
++inline std::optional<uint32_t> Read(PfnFfxQuery query, ffxContext* context, bool& supported)
++{
++    if (!supported || query == nullptr || context == nullptr || *context == nullptr)
++        return std::nullopt;
++
++    Fsr4VkQueryActivePreset desc {};
++    desc.header.type = FSR4VK_QUERY_DESC_TYPE_ACTIVE_PRESET;
++    desc.activePreset = FSR4VK_PRESET_UNKNOWN;
++    const auto result = query(context, &desc.header);
++    if (result == FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE ||
++        result == ProviderNoSupportNewDescriptor)
++        supported = false; // Older/other providers: probe only once per context.
++
++    if (result != FFX_API_RETURN_OK)
++        return std::nullopt;
++
++    switch (desc.activePreset)
++    {
++    case 0:
++    case 1:
++    case 2:
++    case 3:
++    case 4:
++    case 5:
++        return desc.activePreset;
++    default:
++        return std::nullopt;
++    }
++}
++} // namespace FFXVkPresetReporting
+diff --git a/OptiScaler/upscalers/ffx/ffx_vk_preset_query.h b/OptiScaler/upscalers/ffx/ffx_vk_preset_query.h
+new file mode 100644
+index 00000000..3b18412b
+--- /dev/null
++++ b/OptiScaler/upscalers/ffx/ffx_vk_preset_query.h
+@@ -0,0 +1,44 @@
++#ifndef FSR4VK_PRESET_QUERY_H
++#define FSR4VK_PRESET_QUERY_H
++
++#include <cstdint>
++
++// Include ffx_api.h before this header. Optional fsr4vk-specific, read-only
++// descriptor for the existing ffxQuery export; not an AMD SDK descriptor.
++// Freeze this layout/type once published; use a new type for incompatible changes.
++constexpr ffxStructType_t FSR4VK_QUERY_DESC_TYPE_ACTIVE_PRESET = 0x4653523450525354ull;
++constexpr std::uint32_t FSR4VK_PRESET_UNKNOWN = UINT32_MAX;
++
++struct Fsr4VkQueryActivePreset
++{
++    ffxQueryDescHeader header;
++    // Last successfully recorded dispatch, not GPU completion. UINT32_MAX before
++    // the first dispatch: 0=native, 1=quality, 2=balanced, 3=performance,
++    // 4=DRS, 5=ultra performance.
++    std::uint32_t activePreset;
++};
++
++// Optional, separately discoverable forcing contract. Keep the reporting query
++// above backward compatible with reporting-only providers.
++constexpr ffxStructType_t FSR4VK_QUERY_DESC_TYPE_PRESET_CAPABILITIES = 0x4653523450434150ull;
++constexpr ffxStructType_t FSR4VK_CONFIGURE_DESC_TYPE_PRESET = 0x4653523450534554ull;
++constexpr std::uint32_t FSR4VK_PRESET_AUTO = UINT32_MAX;
++
++struct Fsr4VkQueryPresetCapabilities
++{
++    ffxQueryDescHeader header;
++    // Bit N means preset N can be forced. Default/Auto is always supported
++    // when this query is recognized. Zero-initialize before querying.
++    std::uint32_t forcedPresetMask;
++};
++
++struct Fsr4VkConfigurePreset
++{
++    ffxConfigureDescHeader header;
++    // UINT32_MAX restores automatic selection; otherwise a supported model ID.
++    // Applied on the next dispatch without changing input/output dimensions.
++    // Invalid IDs return ERROR_PARAMETER without changing the previous setting.
++    // Serialize configuration, query, dispatch, and destruction per context.
++    std::uint32_t preset;
++};
++#endif

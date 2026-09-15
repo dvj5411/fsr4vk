@@ -1,0 +1,538 @@
+{
+  "cases": [
+    {
+      "case": "drs-00-1280x720-1280x720",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-00-1280x720-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-01-853x480-1280x720",
+      "input": [
+        853,
+        480
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-01-853x480-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-02-752x423-1280x720",
+      "input": [
+        752,
+        423
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-02-752x423-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-03-640x360-1280x720",
+      "input": [
+        640,
+        360
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-03-640x360-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-04-426x240-1280x720",
+      "input": [
+        426,
+        240
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-04-426x240-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-05-1920x1080-1920x1080",
+      "input": [
+        1920,
+        1080
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-05-1920x1080-1920x1080/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-06-1280x720-1920x1080",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-06-1280x720-1920x1080/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-07-1129x635-1920x1080",
+      "input": [
+        1129,
+        635
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-07-1129x635-1920x1080/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-08-960x540-1920x1080",
+      "input": [
+        960,
+        540
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-08-960x540-1920x1080/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-09-640x360-1920x1080",
+      "input": [
+        640,
+        360
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-09-640x360-1920x1080/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-10-2560x1440-2560x1440",
+      "input": [
+        2560,
+        1440
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-10-2560x1440-2560x1440/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-11-1706x960-2560x1440",
+      "input": [
+        1706,
+        960
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-11-1706x960-2560x1440/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-12-1505x847-2560x1440",
+      "input": [
+        1505,
+        847
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-12-1505x847-2560x1440/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-13-1280x720-2560x1440",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-13-1280x720-2560x1440/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-14-853x480-2560x1440",
+      "input": [
+        853,
+        480
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-14-853x480-2560x1440/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-15-3840x2160-3840x2160",
+      "input": [
+        3840,
+        2160
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-15-3840x2160-3840x2160/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-16-2560x1440-3840x2160",
+      "input": [
+        2560,
+        1440
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-16-2560x1440-3840x2160/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-17-2258x1270-3840x2160",
+      "input": [
+        2258,
+        1270
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-17-2258x1270-3840x2160/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-18-1920x1080-3840x2160",
+      "input": [
+        1920,
+        1080
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-18-1920x1080-3840x2160/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-19-1280x720-3840x2160",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-19-1280x720-3840x2160/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-20-853x479-1279x719",
+      "input": [
+        853,
+        479
+      ],
+      "output": [
+        1279,
+        719
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-20-853x479-1279x719/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-21-1280x720-1921x1081",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1921,
+        1081
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-21-1280x720-1921x1081/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-22-900x500-1344x752",
+      "input": [
+        900,
+        500
+      ],
+      "output": [
+        1344,
+        752
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-22-900x500-1344x752/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-23-64x64-128x128",
+      "input": [
+        64,
+        64
+      ],
+      "output": [
+        128,
+        128
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-23-64x64-128x128/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ]
+    },
+    {
+      "case": "drs-24-640x360-1920x1080-to-960x540",
+      "input": [
+        640,
+        360
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-24-640x360-1920x1080-to-960x540/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "second_input": [
+        960,
+        540
+      ]
+    },
+    {
+      "case": "drs-25-960x540-1920x1080-to-640x360",
+      "input": [
+        960,
+        540
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-25-960x540-1920x1080-to-640x360/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "second_input": [
+        640,
+        360
+      ]
+    },
+    {
+      "case": "drs-26-1280x720-3840x2160-to-1920x1080",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-26-1280x720-3840x2160-to-1920x1080/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "second_input": [
+        1920,
+        1080
+      ]
+    },
+    {
+      "case": "drs-27-1920x1080-3840x2160-to-1280x720",
+      "input": [
+        1920,
+        1080
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "2160",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-27-1920x1080-3840x2160-to-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "second_input": [
+        1280,
+        720
+      ]
+    },
+    {
+      "case": "drs-28-1280x720-1920x1080-to-1129x635",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-28-1280x720-1920x1080-to-1129x635/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "second_input": [
+        1129,
+        635
+      ]
+    },
+    {
+      "case": "drs-29-1129x635-1920x1080-to-1280x720",
+      "input": [
+        1129,
+        635
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "dynamic_resolution": true,
+      "tier": "1080",
+      "runs": [
+        "/home/admin/fsr4-drs-20260915/reference-output/drs-matrix-v1-drs-29-1129x635-1920x1080-to-1280x720/amd_fidelityfx_upscaler_dx12-402c-candidate"
+      ],
+      "second_input": [
+        1280,
+        720
+      ]
+    }
+  ]
+}

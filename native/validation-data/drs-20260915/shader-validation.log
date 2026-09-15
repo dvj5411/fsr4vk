@@ -1,0 +1,4 @@
+Verified 12 complete bundles (204 payload files).
+Verified 180 portable shaders.
+Embedded 384 paths using 323 unique payloads.
+180 portable shaders validated for Vulkan 1.1/1.3; all 204 original payloads retained.

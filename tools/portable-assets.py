@@ -83,7 +83,7 @@ def verify(general, portable):
     import json
     count = 0
     for tier in ('1080', '2160'):
-        for preset in ('native', 'quality', 'balanced', 'performance', 'ultraperf'):
+        for preset in ('native', 'quality', 'balanced', 'performance', 'ultraperf', 'drs'):
             base = general/tier/preset
             leaf = portable/tier/preset
             source = json.loads((base/'manifest.json').read_text())

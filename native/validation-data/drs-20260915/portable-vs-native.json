@@ -1,0 +1,1018 @@
+{
+  "cases": [
+    {
+      "case": "drs-00-1280x720-1280x720",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0009708141826834,
+          "max_abs_error": 0.068359375,
+          "above_tolerance_fraction": 0.045399034288194,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0018781795980419,
+          "max_abs_error": 0.14501953125,
+          "above_tolerance_fraction": 0.06575439453125,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-01-853x480-1280x720",
+      "input": [
+        853,
+        480
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0016683619174021,
+          "max_abs_error": 0.06982421875,
+          "above_tolerance_fraction": 0.050537651909722,
+          "frame": 0,
+          "pass": false
+        },
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0028094570148633,
+          "max_abs_error": 0.138671875,
+          "above_tolerance_fraction": 0.071116536458333,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-02-752x423-1280x720",
+      "input": [
+        752,
+        423
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0017035755000625,
+          "max_abs_error": 0.1015625,
+          "above_tolerance_fraction": 0.0545751953125,
+          "frame": 0,
+          "pass": false
+        },
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0032703968163549,
+          "max_abs_error": 0.22119140625,
+          "above_tolerance_fraction": 0.066756456163194,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-03-640x360-1280x720",
+      "input": [
+        640,
+        360
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0026320707948901,
+          "max_abs_error": 0.10009765625,
+          "above_tolerance_fraction": 0.055569118923611,
+          "frame": 0,
+          "pass": false
+        },
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0038316869575759,
+          "max_abs_error": 0.23681640625,
+          "above_tolerance_fraction": 0.063169216579861,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-04-426x240-1280x720",
+      "input": [
+        426,
+        240
+      ],
+      "output": [
+        1280,
+        720
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0016902218239417,
+          "max_abs_error": 0.1904296875,
+          "above_tolerance_fraction": 0.019786241319444,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 3686400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0039988665641139,
+          "max_abs_error": 0.34130859375,
+          "above_tolerance_fraction": 0.052456325954861,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-05-1920x1080-1920x1080",
+      "input": [
+        1920,
+        1080
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00083812275814554,
+          "max_abs_error": 0.39306640625,
+          "above_tolerance_fraction": 0.041094232253086,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0015621884630995,
+          "max_abs_error": 0.3125,
+          "above_tolerance_fraction": 0.05806942033179,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-06-1280x720-1920x1080",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0013849867717183,
+          "max_abs_error": 0.369140625,
+          "above_tolerance_fraction": 0.045018566743827,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0022761299687928,
+          "max_abs_error": 0.23486328125,
+          "above_tolerance_fraction": 0.057952473958333,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-07-1129x635-1920x1080",
+      "input": [
+        1129,
+        635
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0017297214722564,
+          "max_abs_error": 0.379638671875,
+          "above_tolerance_fraction": 0.043999686535494,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0029251511585058,
+          "max_abs_error": 0.3505859375,
+          "above_tolerance_fraction": 0.056282190393519,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-08-960x540-1920x1080",
+      "input": [
+        960,
+        540
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.001985710349309,
+          "max_abs_error": 0.6661376953125,
+          "above_tolerance_fraction": 0.03878002025463,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0026974192084124,
+          "max_abs_error": 0.404541015625,
+          "above_tolerance_fraction": 0.049820842978395,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-09-640x360-1920x1080",
+      "input": [
+        640,
+        360
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0019424306077416,
+          "max_abs_error": 0.3876953125,
+          "above_tolerance_fraction": 0.023103298611111,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0048535203706661,
+          "max_abs_error": 0.43994140625,
+          "above_tolerance_fraction": 0.042853009259259,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-10-2560x1440-2560x1440",
+      "input": [
+        2560,
+        1440
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00066200987240302,
+          "max_abs_error": 0.05517578125,
+          "above_tolerance_fraction": 0.040240342881944,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0012675469560363,
+          "max_abs_error": 0.1005859375,
+          "above_tolerance_fraction": 0.055203721788194,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-11-1706x960-2560x1440",
+      "input": [
+        1706,
+        960
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0010380164032797,
+          "max_abs_error": 0.1298828125,
+          "above_tolerance_fraction": 0.041385430230035,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0020070440684187,
+          "max_abs_error": 0.22705078125,
+          "above_tolerance_fraction": 0.052103610568576,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-12-1505x847-2560x1440",
+      "input": [
+        1505,
+        847
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0011891507767263,
+          "max_abs_error": 0.09130859375,
+          "above_tolerance_fraction": 0.037200181749132,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0020795300023103,
+          "max_abs_error": 0.2314453125,
+          "above_tolerance_fraction": 0.049677327473958,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-13-1280x720-2560x1440",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0015688825327293,
+          "max_abs_error": 0.12744140625,
+          "above_tolerance_fraction": 0.037169325086806,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0023460036861926,
+          "max_abs_error": 0.2568359375,
+          "above_tolerance_fraction": 0.044463229709201,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-14-853x480-2560x1440",
+      "input": [
+        853,
+        480
+      ],
+      "output": [
+        2560,
+        1440
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0011681819056256,
+          "max_abs_error": 0.173583984375,
+          "above_tolerance_fraction": 0.015525444878472,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 14745600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0032638344667317,
+          "max_abs_error": 0.41259765625,
+          "above_tolerance_fraction": 0.03684075249566,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-15-3840x2160-3840x2160",
+      "input": [
+        3840,
+        2160
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00056385989549206,
+          "max_abs_error": 0.05859375,
+          "above_tolerance_fraction": 0.037211100260417,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0010616148781941,
+          "max_abs_error": 0.14599609375,
+          "above_tolerance_fraction": 0.05291690779321,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-16-2560x1440-3840x2160",
+      "input": [
+        2560,
+        1440
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00082229643475361,
+          "max_abs_error": 0.091796875,
+          "above_tolerance_fraction": 0.040890178915895,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0015302135625978,
+          "max_abs_error": 0.22021484375,
+          "above_tolerance_fraction": 0.047121160059799,
+          "frame": 1,
+          "pass": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-17-2258x1270-3840x2160",
+      "input": [
+        2258,
+        1270
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00094637121610839,
+          "max_abs_error": 0.087890625,
+          "above_tolerance_fraction": 0.035654688705633,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0017540479812222,
+          "max_abs_error": 0.354736328125,
+          "above_tolerance_fraction": 0.044086311246142,
+          "frame": 1,
+          "pass": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-18-1920x1080-3840x2160",
+      "input": [
+        1920,
+        1080
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00092860560886486,
+          "max_abs_error": 0.19384765625,
+          "above_tolerance_fraction": 0.032105547116127,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0017263188545432,
+          "max_abs_error": 0.229736328125,
+          "above_tolerance_fraction": 0.038159933207948,
+          "frame": 1,
+          "pass": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-19-1280x720-3840x2160",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0012946763580431,
+          "max_abs_error": 0.21484375,
+          "above_tolerance_fraction": 0.01687270929784,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0030319457006405,
+          "max_abs_error": 0.408203125,
+          "above_tolerance_fraction": 0.031866048177083,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-20-853x479-1279x719",
+      "input": [
+        853,
+        479
+      ],
+      "output": [
+        1279,
+        719
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 3678404,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0015705475137824,
+          "max_abs_error": 0.08251953125,
+          "above_tolerance_fraction": 0.046537302591015,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 3678404,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0028050978848652,
+          "max_abs_error": 0.1611328125,
+          "above_tolerance_fraction": 0.070278033625453,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-21-1280x720-1921x1081",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1921,
+        1081
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 8306404,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0012326744720349,
+          "max_abs_error": 0.08203125,
+          "above_tolerance_fraction": 0.043436847039947,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 8306404,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0023164065097148,
+          "max_abs_error": 0.203857421875,
+          "above_tolerance_fraction": 0.058531104434603,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-22-900x500-1344x752",
+      "input": [
+        900,
+        500
+      ],
+      "output": [
+        1344,
+        752
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 4042752,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0014955083997257,
+          "max_abs_error": 0.08203125,
+          "above_tolerance_fraction": 0.050910369965805,
+          "frame": 0,
+          "pass": false
+        },
+        {
+          "values": 4042752,
+          "nonfinite_pairs": 0,
+          "rmse": 0.003045737670973,
+          "max_abs_error": 0.1748046875,
+          "above_tolerance_fraction": 0.071546807719098,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-23-64x64-128x128",
+      "input": [
+        64,
+        64
+      ],
+      "output": [
+        128,
+        128
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 65536,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 65536,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "pass": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-24-640x360-1920x1080-to-960x540",
+      "input": [
+        640,
+        360
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0020093093295734,
+          "max_abs_error": 0.621337890625,
+          "above_tolerance_fraction": 0.023102695794753,
+          "frame": 0,
+          "pass": false
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0064935131643375,
+          "max_abs_error": 0.428955078125,
+          "above_tolerance_fraction": 0.33510428722994,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "second_input": [
+        960,
+        540
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-25-960x540-1920x1080-to-640x360",
+      "input": [
+        960,
+        540
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0021966912680207,
+          "max_abs_error": 0.6817626953125,
+          "above_tolerance_fraction": 0.038837408371914,
+          "frame": 0,
+          "pass": false
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0059540587507771,
+          "max_abs_error": 0.60888671875,
+          "above_tolerance_fraction": 0.41107663001543,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "second_input": [
+        640,
+        360
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-26-1280x720-3840x2160-to-1920x1080",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0012946763580431,
+          "max_abs_error": 0.21484375,
+          "above_tolerance_fraction": 0.01687270929784,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0027826811894154,
+          "max_abs_error": 0.22265625,
+          "above_tolerance_fraction": 0.26941801094715,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "second_input": [
+        1920,
+        1080
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-27-1920x1080-3840x2160-to-1280x720",
+      "input": [
+        1920,
+        1080
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00092860560886486,
+          "max_abs_error": 0.19384765625,
+          "above_tolerance_fraction": 0.032105547116127,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0036649667860725,
+          "max_abs_error": 0.411865234375,
+          "above_tolerance_fraction": 0.4149282648534,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "second_input": [
+        1280,
+        720
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-28-1280x720-1920x1080-to-1129x635",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.001359851613634,
+          "max_abs_error": 0.469970703125,
+          "above_tolerance_fraction": 0.045101152584877,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0037648790724949,
+          "max_abs_error": 0.4130859375,
+          "above_tolerance_fraction": 0.11935112847222,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "second_input": [
+        1129,
+        635
+      ],
+      "status": "failed_threshold"
+    },
+    {
+      "case": "drs-29-1129x635-1920x1080-to-1280x720",
+      "input": [
+        1129,
+        635
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "preset": "drs",
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.001776217715941,
+          "max_abs_error": 0.435791015625,
+          "above_tolerance_fraction": 0.043964723186728,
+          "frame": 0,
+          "pass": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0040044252875225,
+          "max_abs_error": 0.4091796875,
+          "above_tolerance_fraction": 0.39514973958333,
+          "frame": 1,
+          "pass": false
+        }
+      ],
+      "second_input": [
+        1280,
+        720
+      ],
+      "status": "failed_threshold"
+    }
+  ]
+}

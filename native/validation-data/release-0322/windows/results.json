@@ -1,0 +1,62 @@
+[
+  {
+    "case": "1-1-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=1 active=1",
+      "preset_frame=1 requested=1 active=1",
+      "output_fnv1a64=c7deeac0c02ea54a",
+      "output_min=0.0400695800781 max=0.966796875 mean=0.229771587032 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "d46b462c56662b0fcc42d318cf5e3beeeb5f50dcc126c2b3426310f729959dea"
+  },
+  {
+    "case": "4-4-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=4 active=4",
+      "preset_frame=1 requested=4 active=4",
+      "output_fnv1a64=99680af180e2beb1",
+      "output_min=0.0400390625 max=0.974609375 mean=0.229603254037 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "c7ae9cfb701d6c381f7b44885c6ccda119cca153f249aa3fd994bf0fbb58f35b"
+  },
+  {
+    "case": "1-4-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=1 active=1",
+      "preset_frame=1 requested=4 active=4",
+      "output_fnv1a64=9221a26d98a91f42",
+      "output_min=0.0400695800781 max=0.97216796875 mean=0.229821028452 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "383a517a2ecc6c67cbc895b7217619702e1f4fe5f6d91c97a5f58bee2542558e"
+  },
+  {
+    "case": "4-auto-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=4 active=4",
+      "preset_frame=1 requested=auto active=1",
+      "output_fnv1a64=2e8730a6ccd3adc3",
+      "output_min=0.0400695800781 max=0.97216796875 mean=0.229855335907 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "a4ef22b6b38e989ff958b2030793487540a06d7c54124bb0de61bb73a56b30e4"
+  }
+]

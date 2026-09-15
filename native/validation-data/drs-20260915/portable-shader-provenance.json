@@ -1,0 +1,9 @@
+{
+  "dll_sha256": "c7720bc16bede334f59a1a32cd22edbcbbb159685ed5240e61350a5fb0bc8a94",
+  "probe_sha256": "02ad2899edde5ce70f10f5ff77980395ceb9a34114081ff5ca0511bef192d028",
+  "vkd3d_sha256": "68b8bc7b32f9b1b1b0526e9e2e769731dd8da9af0f2b40f76012385b9d5721df",
+  "VKD3D_CONFIG": "force_raw_va_cbv",
+  "VKD3D_DISABLE_EXTENSIONS": "VK_VALVE_shader_mixed_float_dot_product,VK_KHR_shader_float_controls2,VK_NV_raw_access_chains",
+  "gpu": "AMD Radeon Pro W6400",
+  "driver": "Mesa 26.2.2"
+}

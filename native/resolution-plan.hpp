@@ -10,7 +10,8 @@ inline uint32_t divide_up(uint32_t value,uint32_t divisor) { return (value+divis
 inline float sanitize_pre_exposure(float value) {
     return std::isfinite(value) && value>0.0f ? value : 1.0f;
 }
-inline const char* resolution_preset(uint32_t input_width,uint32_t output_width) {
+inline const char* resolution_preset(uint32_t input_width,uint32_t output_width,bool dynamic_resolution=false) {
+    if(dynamic_resolution)return "drs";
     const float ratio=float(round_up(output_width,8))/input_width;
     if(ratio>=2.99f)return "ultraperf";
     if(ratio>=1.99f)return "performance";

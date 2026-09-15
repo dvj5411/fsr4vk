@@ -1,0 +1,6 @@
+context created flags=104 api=1.1
+FSR4 Vulkan dispatch rejected: unsupported depth resource
+preset=drs
+shader_backend=portable-int8
+first dispatch recorded: 900x500 -> 1344x752
+motion scale API=900.000000,500.000000 shader=1.000000,1.000000

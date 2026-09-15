@@ -22,14 +22,19 @@ class PackagingTests(unittest.TestCase):
             command = [sys.executable,str(Path(__file__).with_name('embed-general-assets.py')),str(general),str(root/'generated')]
             subprocess.run(command,check=True,capture_output=True)
             report = json.loads((root/'generated/embedded-assets.json').read_text())
-            self.assertEqual(len(report['entries']),320)
-            self.assertEqual(len({e['path'] for e in report['entries']}),320)
+            self.assertEqual(len(report['entries']),384)
+            self.assertEqual(len({e['path'] for e in report['entries']}),384)
             self.assertEqual(len({e['resource_id'] for e in report['entries']}),
                              len({e['sha256'] for e in report['entries']}))
             before = (root/'generated/embedded-asset-index.hpp').read_bytes()
             subprocess.run(command,check=True,capture_output=True)
             self.assertEqual(before,(root/'generated/embedded-asset-index.hpp').read_bytes())
-            (general/'1080/native/weights.bin').write_bytes(b'corrupt')
+            manifest=general/'2160/drs/manifest.json'
+            manifest_bytes=manifest.read_bytes()
+            manifest.unlink()
+            self.assertNotEqual(subprocess.run(command,capture_output=True).returncode,0)
+            manifest.write_bytes(manifest_bytes)
+            (general/'1080/drs/weights.bin').write_bytes(b'corrupt')
             self.assertNotEqual(subprocess.run(command,capture_output=True).returncode,0)
 
 if __name__ == '__main__': unittest.main()

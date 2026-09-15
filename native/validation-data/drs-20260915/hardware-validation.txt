@@ -1,0 +1,93 @@
+WARNING: [Loader Message] Code 0 : Removing layer VK_LAYER_LSFGVK_frame_generation_x86 (/usr/local/share/vulkan/implicit_layer.d/VkLayer_LSFGVK_frame_generation.x86.json) because it is a duplicate of VK_LAYER_LSFGVK_frame_generation_x86 (/home/admin/.local/share/vulkan/implicit_layer.d/VkLayer_LSFGVK_frame_generation.x86.json)
+WARNING: [Loader Message] Code 0 : Removing layer VK_LAYER_LSFGVK_frame_generation (/usr/local/share/vulkan/implicit_layer.d/VkLayer_LSFGVK_frame_generation.json) because it is a duplicate of VK_LAYER_LSFGVK_frame_generation (/home/admin/.local/share/vulkan/implicit_layer.d/VkLayer_LSFGVK_frame_generation.json)
+ERROR: [Loader Message] Code 0 : loader_create_instance_chain: Failed to find 'vkGetInstanceProcAddr' in layer "/home/admin/.local/share/vulkan/implicit_layer.d/../../../lib/liblsfg-vk-layer.so"
+WARNING: [Loader Message] Code 0 : terminator_CreateInstance: Received return code -9 from call to vkCreateInstance in ICD /usr/lib64/libvulkan_dzn.so. Skipping this driver.
+'DISPLAY' environment variable not set... skipping surface info
+ERROR: [Loader Message] Code 0 : loader_create_device_chain: Failed to find 'vkGetInstanceProcAddr' in layer "/home/admin/.local/share/vulkan/implicit_layer.d/../../../lib/liblsfg-vk-layer.so".  Skipping layer.
+ERROR: [Loader Message] Code 0 : loader_create_device_chain: Failed to find 'vkGetInstanceProcAddr' in layer "/home/admin/.local/share/vulkan/implicit_layer.d/../../../lib/liblsfg-vk-layer.so".  Skipping layer.
+WARNING: [Loader Message] Code 0 : ICD for selected physical device does not export vkGetPhysicalDeviceDisplayPlanePropertiesKHR!
+WARNING: [Loader Message] Code 0 : ICD for selected physical device does not export vkGetPhysicalDeviceDisplayPropertiesKHR!
+==========
+VULKANINFO
+==========
+
+Vulkan Instance Version: 1.4.341
+
+
+Instance Extensions: count = 26
+-------------------------------
+VK_EXT_acquire_drm_display             : extension revision 1
+VK_EXT_acquire_xlib_display            : extension revision 1
+VK_EXT_debug_report                    : extension revision 10
+VK_EXT_debug_utils                     : extension revision 2
+VK_EXT_direct_mode_display             : extension revision 1
+VK_EXT_display_surface_counter         : extension revision 1
+VK_EXT_headless_surface                : extension revision 1
+VK_EXT_layer_settings                  : extension revision 2
+VK_EXT_surface_maintenance1            : extension revision 1
+VK_EXT_swapchain_colorspace            : extension revision 5
+VK_KHR_device_group_creation           : extension revision 1
+VK_KHR_display                         : extension revision 23
+VK_KHR_external_fence_capabilities     : extension revision 1
+VK_KHR_external_memory_capabilities    : extension revision 1
+VK_KHR_external_semaphore_capabilities : extension revision 1
+VK_KHR_get_display_properties2         : extension revision 1
+VK_KHR_get_physical_device_properties2 : extension revision 2
+VK_KHR_get_surface_capabilities2       : extension revision 1
+VK_KHR_portability_enumeration         : extension revision 1
+VK_KHR_surface                         : extension revision 25
+VK_KHR_surface_maintenance1            : extension revision 1
+VK_KHR_surface_protected_capabilities  : extension revision 1
+VK_KHR_wayland_surface                 : extension revision 6
+VK_KHR_xcb_surface                     : extension revision 6
+VK_KHR_xlib_surface                    : extension revision 6
+VK_LUNARG_direct_driver_loading        : extension revision 1
+
+Instance Layers: count = 17
+---------------------------
+VK_LAYER_FROG_gamescope_wsi_x86      Gamescope WSI (XWayland Bypass) Layer (x86)                  1.3.221  version 1
+VK_LAYER_FROG_gamescope_wsi_x86_64   Gamescope WSI (XWayland Bypass) Layer (x86_64)               1.3.221  version 1
+VK_LAYER_KORTHOS_low_latency         Input latency reduction layer                                1.3.0    version 3
+VK_LAYER_LSFGVK_frame_generation     Lossless Scaling frame generation layer                      1.4.350  version 2
+VK_LAYER_LSFGVK_frame_generation_x86 Lossless Scaling frame generation layer                      1.4.350  version 2
+VK_LAYER_MAKO_render                 MAKO Renderer graphics layer                                 1.4.328  version 2
+VK_LAYER_MANGOHUD_overlay_x86        Vulkan Hud Overlay                                           1.3.0    version 1
+VK_LAYER_MANGOHUD_overlay_x86_64     Vulkan Hud Overlay                                           1.3.0    version 1
+VK_LAYER_MESA_anti_lag               Open-source implementation of the VK_AMD_anti_lag extension. 1.4.303  version 1
+VK_LAYER_MESA_device_select          Linux device selection layer                                 1.4.303  version 1
+VK_LAYER_OBS_vkcapture_32            OBS Linux game capture                                       1.4.328  version 1
+VK_LAYER_OBS_vkcapture_64            OBS Linux game capture                                       1.4.328  version 1
+VK_LAYER_VALVE_steam_fossilize_32    Steam Pipeline Caching Layer                                 1.3.207  version 1
+VK_LAYER_VALVE_steam_fossilize_64    Steam Pipeline Caching Layer                                 1.3.207  version 1
+VK_LAYER_VALVE_steam_overlay_32      Steam Overlay Layer                                          1.3.207  version 1
+VK_LAYER_VALVE_steam_overlay_64      Steam Overlay Layer                                          1.3.207  version 1
+VK_LAYER_VKBASALT_post_processing    a post processing layer                                      1.3.223  version 1
+
+Devices:
+========
+GPU0:
+	apiVersion         = 1.4.354
+	driverVersion      = 26.2.2
+	vendorID           = 0x1002
+	deviceID           = 0x7422
+	deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
+	deviceName         = AMD Radeon Pro W6400 (RADV NAVI24)
+	driverID           = DRIVER_ID_MESA_RADV
+	driverName         = radv
+	driverInfo         = Mesa 26.2.2
+	conformanceVersion = 1.4.5.3
+	deviceUUID         = 00000000-0400-0000-0000-000000000000
+	driverUUID         = 414d442d-4d45-5341-2d44-525600000000
+GPU1:
+	apiVersion         = 1.4.354
+	driverVersion      = 26.2.2
+	vendorID           = 0x10005
+	deviceID           = 0x0000
+	deviceType         = PHYSICAL_DEVICE_TYPE_CPU
+	deviceName         = llvmpipe (LLVM 22.1.8, 256 bits)
+	driverID           = DRIVER_ID_MESA_LLVMPIPE
+	driverName         = llvmpipe
+	driverInfo         = Mesa 26.2.2 (LLVM 22.1.8)
+	conformanceVersion = 1.3.1.1
+	deviceUUID         = 6d657361-3236-2e32-2e32-000000000000
+	driverUUID         = 6c6c766d-7069-7065-5555-494400000000

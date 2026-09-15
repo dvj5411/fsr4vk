@@ -1,0 +1,14 @@
+device=AMD Radeon Pro W6400 (RADV NAVI24) requested_api=1.3
+descriptor_layout_sizes=2048,8256,8192,embedded binding_offsets=0,64,0,embedded mutable_stride=64 concrete_sizes=16,16,64,16,32,16
+depth_target=cleanly-rejected
+preset_frame=0 requested=4 active=4
+dispatch=quality-frame passes=15 status=recorded
+preset_frame=1 requested=auto active=1
+context_frames=2 moving_reference_frame=1 reset=false
+output_fnv1a64=2e8730a6ccd3adc3
+output_min=0.0400695800781 max=0.97216796875 mean=0.229855335907 nonfinite=0
+uploaded_color_fnv1a64=4033612e975ad548 expected=4033612e975ad548
+output="Z:\\run\\media\\system\\1tb\\fsr4vk-release0322.jNMDDH\\checks-windows-embedded\\4-auto-1920.rgba16f"
+cleanup=begin
+cleanup=provider-destroyed
+cleanup=complete

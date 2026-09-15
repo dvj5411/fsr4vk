@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify all ten private shader/model bundles before using a candidate package."""
+"""Verify all twelve private shader/model bundles before using a candidate package."""
 import argparse
 import hashlib
 import json
@@ -10,7 +10,7 @@ p.add_argument('general', type=Path)
 a = p.parse_args()
 count = 0
 for tier in ('1080', '2160'):
-    for preset in ('native', 'quality', 'balanced', 'performance', 'ultraperf'):
+    for preset in ('native', 'quality', 'balanced', 'performance', 'ultraperf', 'drs'):
         leaf = a.general/tier/preset
         manifest = json.loads((leaf/'manifest.json').read_text())
         assert manifest['preset'] == preset
@@ -22,4 +22,4 @@ for tier in ('1080', '2160'):
             if hashlib.sha256((leaf/name).read_bytes()).hexdigest() != digest:
                 raise RuntimeError(f'hash mismatch: {leaf/name}')
         count += 1
-print(f'Verified {count} complete bundles (170 payload files).')
+print(f'Verified {count} complete bundles ({count * 17} payload files).')

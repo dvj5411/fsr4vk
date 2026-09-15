@@ -1,0 +1,645 @@
+{
+  "dll_sha256": "171fc2f8675c0bf144239b6ab27954c25ddb25c8e28e592882592cf488548e37",
+  "cases": [
+    {
+      "case": "regression-1080-native",
+      "input": [
+        1920,
+        1080
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00042707937688593,
+          "max_abs_error": 0.193115234375,
+          "above_tolerance_fraction": 0.0029226948302469,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00072937056039665,
+          "max_abs_error": 0.281494140625,
+          "above_tolerance_fraction": 0.0042804783950617,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "regression-1080-quality",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00070907253708314,
+          "max_abs_error": 0.275390625,
+          "above_tolerance_fraction": 0.0025790895061728,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0011826027924027,
+          "max_abs_error": 0.42236328125,
+          "above_tolerance_fraction": 0.0039741271219136,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "regression-1080-balanced",
+      "input": [
+        1129,
+        635
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00045939698401667,
+          "max_abs_error": 0.26611328125,
+          "above_tolerance_fraction": 0.0016306182484568,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00098105918994468,
+          "max_abs_error": 0.377685546875,
+          "above_tolerance_fraction": 0.0038452449845679,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "regression-1080-performance",
+      "input": [
+        960,
+        540
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00044202551981423,
+          "max_abs_error": 0.183349609375,
+          "above_tolerance_fraction": 0.0014952256944444,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00053291806560857,
+          "max_abs_error": 0.22412109375,
+          "above_tolerance_fraction": 0.0036358265817901,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "regression-1080-ultraperf",
+      "input": [
+        640,
+        360
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0012852160174678,
+          "max_abs_error": 0.467529296875,
+          "above_tolerance_fraction": 0.0017525077160494,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00088434458637864,
+          "max_abs_error": 0.356689453125,
+          "above_tolerance_fraction": 0.0034458188657407,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "regression-2160-native",
+      "input": [
+        3840,
+        2160
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "regression-2160-quality",
+      "input": [
+        2560,
+        1440
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "regression-2160-balanced",
+      "input": [
+        2258,
+        1270
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "regression-2160-performance",
+      "input": [
+        1920,
+        1080
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "regression-2160-ultraperf",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-06-1280x720-1920x1080",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00077222066989532,
+          "max_abs_error": 0.353515625,
+          "above_tolerance_fraction": 0.0017345437885802,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0010400104587867,
+          "max_abs_error": 0.4443359375,
+          "above_tolerance_fraction": 0.003442081404321,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-16-2560x1440-3840x2160",
+      "input": [
+        2560,
+        1440
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-20-853x479-1279x719",
+      "input": [
+        853,
+        479
+      ],
+      "output": [
+        1279,
+        719
+      ],
+      "frames": [
+        {
+          "values": 3678404,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 3678404,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0001791904117647,
+          "max_abs_error": 0.03662109375,
+          "above_tolerance_fraction": 0.0028031178739475,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-21-1280x720-1921x1081",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1921,
+        1081
+      ],
+      "frames": [
+        {
+          "values": 8306404,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8306404,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00014452612116166,
+          "max_abs_error": 0.051513671875,
+          "above_tolerance_fraction": 0.0012534906802029,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-24-640x360-1920x1080-to-960x540",
+      "input": [
+        640,
+        360
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00037573631373658,
+          "max_abs_error": 0.23291015625,
+          "above_tolerance_fraction": 0.00033046392746914,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00093957801167179,
+          "max_abs_error": 0.430419921875,
+          "above_tolerance_fraction": 0.011554904513889,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-25-960x540-1920x1080-to-640x360",
+      "input": [
+        960,
+        540
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0013319601626874,
+          "max_abs_error": 0.7047119140625,
+          "above_tolerance_fraction": 0.0015967399691358,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0016647009677619,
+          "max_abs_error": 0.6448974609375,
+          "above_tolerance_fraction": 0.016514636381173,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-26-1280x720-3840x2160-to-1920x1080",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-27-1920x1080-3840x2160-to-1280x720",
+      "input": [
+        1920,
+        1080
+      ],
+      "output": [
+        3840,
+        2160
+      ],
+      "frames": [
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 33177600,
+          "nonfinite_pairs": 0,
+          "rmse": 0,
+          "max_abs_error": 0,
+          "above_tolerance_fraction": 0,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-28-1280x720-1920x1080-to-1129x635",
+      "input": [
+        1280,
+        720
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.000487980374143,
+          "max_abs_error": 0.39697265625,
+          "above_tolerance_fraction": 0.001128833912037,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.0012994782596422,
+          "max_abs_error": 0.50390625,
+          "above_tolerance_fraction": 0.0060797646604938,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case": "drs-29-1129x635-1920x1080-to-1280x720",
+      "input": [
+        1129,
+        635
+      ],
+      "output": [
+        1920,
+        1080
+      ],
+      "frames": [
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00049771780893631,
+          "max_abs_error": 0.360595703125,
+          "above_tolerance_fraction": 0.001278694058642,
+          "frame": 0,
+          "passed": true
+        },
+        {
+          "values": 8294400,
+          "nonfinite_pairs": 0,
+          "rmse": 0.00088234393073634,
+          "max_abs_error": 0.3388671875,
+          "above_tolerance_fraction": 0.014145085841049,
+          "frame": 1,
+          "passed": true
+        }
+      ],
+      "status": "passed"
+    }
+  ]
+}

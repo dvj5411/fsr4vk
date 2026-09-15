@@ -57,7 +57,7 @@ export FSR4_VULKAN_IMPORT_LIBRARY=/path/to/libvulkan-1.a
 ./tools/build-vulkan-provider-windows.sh
 ```
 
-The script verifies all ten original and portable shader/model bundles, embeds them, and
+The script verifies all twelve original and portable shader/model bundles, embeds them, and
 writes the self-contained provider under both supported discovery names:
 
 ```text
@@ -68,12 +68,19 @@ build/provider-windows/amd_fidelityfx_vk.dll
 Set `FSR4_PROVIDER_OUTPUT_DIR` to change the output directory or
 `FSR4_EMBED_ASSETS` to build with another verified `assets/general` tree and
 its sibling `assets/portable` tree. The portable INT8 backend is selected
-automatically when the VALVE mixed-dot feature is unavailable. See
-[NVIDIA validation](NVIDIA-VALIDATION.md) for tested hardware, numerical results and successful NMS gameplay validation.
+automatically when the VALVE mixed-dot feature is unavailable. Initial NVIDIA
+validation covers the RTX 3070 Ti through Proton, not native Windows NVIDIA.
 
 Release 0.3.2.1 also preserves NMS dynamic-rendering device features on Steam
 Deck and removes the obsolete fixed-resolution provider fallback. The scalar-spill
 optimization remains a separate research experiment and is not included.
+
+Release 0.3.2.2 adds Preset 4 (DRS), optional forced selection of presets 0–5,
+and reporting of the last successfully dispatched preset. Auto follows the
+context's DRS flag or upscale ratio. The minor optimisation is a CPU-side
+active-model lookup bypass; shader spill experiments remain excluded.
+See [preset control](provider/PRESET-CONTROL.md) and the
+[manual upstream OptiScaler patch](provider/optiscaler-preset-control-upstream.patch).
 
 ## Build OptiScaler
 

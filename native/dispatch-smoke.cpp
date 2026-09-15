@@ -398,6 +398,7 @@ int main(int argc, char** argv) {
     const bool nms_formats = argc == 6 && std::string(argv[5]) == "--provider-nms-formats";
     const bool doom_formats = argc == 6 && std::string(argv[5]) == "--provider-doom-formats";
     const bool game_formats = nms_formats || doom_formats;
+    const bool dynamic_resolution = std::getenv("FSR4_TEST_DYNAMIC_RESOLUTION") != nullptr;
     const bool temporal_test = argc == 6 && std::string(argv[5]) == "--provider-temporal";
     const bool nms_inputs = temporal_test || game_formats || (argc == 6 && std::string(argv[5]) == "--provider-nms");
     const bool use_provider = nms_inputs || (argc == 6 && std::string(argv[5]) == "--provider");
@@ -413,7 +414,14 @@ int main(int argc, char** argv) {
     };
     if(!read_size("FSR4_TEST_RENDER_SIZE",kRenderWidth,kRenderHeight) ||
        !read_size("FSR4_TEST_OUTPUT_SIZE",kOutputWidth,kOutputHeight))return 2;
-    try { fsr4::validate_dimensions(kRenderWidth,kRenderHeight,kOutputWidth,kOutputHeight); }
+    uint32_t second_width=kRenderWidth,second_height=kRenderHeight;
+    const bool resize_input=std::getenv("FSR4_TEST_SECOND_RENDER_SIZE")!=nullptr;
+    if(!read_size("FSR4_TEST_SECOND_RENDER_SIZE",second_width,second_height) ||
+       (resize_input && (!dynamic_resolution || !temporal_test)))return 2;
+    const uint32_t max_render_width=std::max(kRenderWidth,second_width);
+    const uint32_t max_render_height=std::max(kRenderHeight,second_height);
+    try { fsr4::validate_dimensions(second_width,second_height,kOutputWidth,kOutputHeight);
+          fsr4::validate_dimensions(kRenderWidth,kRenderHeight,kOutputWidth,kOutputHeight); }
     catch(const std::exception& e) { std::cerr<<e.what()<<'\n';return 2; }
     if((std::getenv("FSR4_TEST_RENDER_SIZE") || std::getenv("FSR4_TEST_OUTPUT_SIZE")) && !temporal_test)return 2;
 #if defined(FSR4_EXTERNAL_PROVIDER)
@@ -772,7 +780,8 @@ int main(int argc, char** argv) {
         const VkDeviceSize depth_size = frame.depth.size() * sizeof(float);
         const VkDeviceSize motion_size = frame.motion.size() * sizeof(std::uint16_t);
         const VkDeviceSize exposure_offset = color_size + depth_size + motion_size;
-        const VkDeviceSize staging_size = exposure_offset + sizeof(float);
+        const VkDeviceSize staging_size = std::max(exposure_offset + sizeof(float),
+            VkDeviceSize(second_width)*second_height*16+sizeof(float));
         buffers.push_back(create_buffer(
             physical_device, device, staging_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
@@ -1121,8 +1130,9 @@ int main(int argc, char** argv) {
                 CreateBackendVkDesc backend{{3,nullptr},device,physical_device,vkGetDeviceProcAddr};
                 ffxCreateContextDescUpscale create{};
                 create.header={FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE,&backend.header};
-                create.maxRenderSize={kRenderWidth,kRenderHeight}; create.maxUpscaleSize={kOutputWidth,kOutputHeight};
+                create.maxRenderSize={max_render_width,max_render_height}; create.maxUpscaleSize={kOutputWidth,kOutputHeight};
                 if (nms_inputs) create.flags=FFX_UPSCALE_ENABLE_DEPTH_INVERTED | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
+                if (dynamic_resolution) create.flags |= FFX_UPSCALE_ENABLE_DYNAMIC_RESOLUTION;
                 if (game_formats) create.flags |= FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE;
                 if(ffxCreateContext(&api_context,&create.header,nullptr)!=FFX_API_RETURN_OK)
                     throw std::runtime_error("provider creation failed");
@@ -1225,16 +1235,27 @@ int main(int argc, char** argv) {
                         VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
                 context_constants.reset = frame_index <= 16 || frame_index == 18;
                 if (temporal_test) {
+                    if (resize_input) {
+                        kRenderWidth=second_width; kRenderHeight=second_height;
+                        for (Image* input : {&color,&depth,&motion}) {
+                            const auto format=input->format;
+                            destroy_image(device,*input);
+                            *input=create_image(physical_device,device,kRenderWidth,kRenderHeight,format,
+                                VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+                        }
+                    }
                     generate_reference_frame(frame,1);
                     for (auto& z:frame.depth) z=1.0f-z;
-                    std::memcpy(staging_bytes,frame.color.data(),color_size);
-                    std::memcpy(staging_bytes+color_size,frame.depth.data(),depth_size);
-                    std::memcpy(staging_bytes+color_size+depth_size,frame.motion.data(),motion_size);
+                    const VkDeviceSize next_color_size=frame.color.size()*2,next_depth_size=frame.depth.size()*4;
+                    std::memcpy(staging_bytes,frame.color.data(),next_color_size);
+                    std::memcpy(staging_bytes+next_color_size,frame.depth.data(),next_depth_size);
+                    std::memcpy(staging_bytes+next_color_size+next_depth_size,frame.motion.data(),frame.motion.size()*2);
                     for (const Image* input : {&color,&depth,&motion})
-                        image_barrier(command_buffer,input->image,input==&color ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                        image_barrier(command_buffer,input->image,resize_input ? VK_IMAGE_LAYOUT_UNDEFINED :
+                            (input==&color ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,VK_ACCESS_2_MEMORY_READ_BIT,
                             VK_PIPELINE_STAGE_2_COPY_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT);
-                    copy_to_image(color,0); copy_to_image(depth,color_size); copy_to_image(motion,color_size+depth_size);
+                    copy_to_image(color,0); copy_to_image(depth,next_color_size); copy_to_image(motion,next_color_size+next_depth_size);
                     for (const Image* input : {&color,&depth,&motion})
                         image_barrier(command_buffer,input->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                             VK_PIPELINE_STAGE_2_COPY_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);

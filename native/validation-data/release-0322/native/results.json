@@ -1,0 +1,152 @@
+[
+  {
+    "case": "0-0-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=0 active=0",
+      "preset_frame=1 requested=0 active=0",
+      "output_fnv1a64=1bd7e9be53e71430",
+      "output_min=0.0400695800781 max=0.99462890625 mean=0.229875621376 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "566e2b90b4e254a979457201b24928bd6fb4ed7cbe25bb3725feca19720e066f"
+  },
+  {
+    "case": "1-1-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=1 active=1",
+      "preset_frame=1 requested=1 active=1",
+      "output_fnv1a64=3de2f1004f1d5679",
+      "output_min=0.0400695800781 max=0.966796875 mean=0.229771985279 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "408fab22993e8b26786ef3f25b877e3d380dee75c88dc505f20b65156c392215"
+  },
+  {
+    "case": "2-2-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=2 active=2",
+      "preset_frame=1 requested=2 active=2",
+      "output_fnv1a64=70b4f2782f757646",
+      "output_min=0.0400695800781 max=0.97021484375 mean=0.229717461452 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "2964c2ac262bbf92c8df4db83fa8bd70383bfea7bb657538699e47f5134e1918"
+  },
+  {
+    "case": "3-3-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=3 active=3",
+      "preset_frame=1 requested=3 active=3",
+      "output_fnv1a64=5e6eac01822b039b",
+      "output_min=0.0400695800781 max=0.97021484375 mean=0.229441578867 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "89a554f0569836d313dfd66fc4de46a1c4d4d51452ba2217523dbcf0ac668cc0"
+  },
+  {
+    "case": "4-4-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=4 active=4",
+      "preset_frame=1 requested=4 active=4",
+      "output_fnv1a64=d27e33485c3cdbc4",
+      "output_min=0.0400390625 max=0.974609375 mean=0.229599260614 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "9b8ac91ae5dc18c8bf308bf0c4f7b3e2faeba1e51cd9d709a90ad8ff7fd5821d"
+  },
+  {
+    "case": "5-5-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=5 active=5",
+      "preset_frame=1 requested=5 active=5",
+      "output_fnv1a64=8f69526016a126f6",
+      "output_min=0.0401000976562 max=0.953125 mean=0.229120274186 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "c7ae31658b344dd1e3e9efa81044ee0aed9a264bbbefa5d4a8405fdd679d9e04"
+  },
+  {
+    "case": "auto-auto-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=auto active=1",
+      "preset_frame=1 requested=auto active=1",
+      "output_fnv1a64=803acef023ed7d51",
+      "output_min=0.0400695800781 max=0.966796875 mean=0.229770481947 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "8f26a4286d90c49f74c7565c28f281c2e75ee2ea3ad0087ff2a5fafd0d7a3f90"
+  },
+  {
+    "case": "1-4-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=1 active=1",
+      "preset_frame=1 requested=4 active=4",
+      "output_fnv1a64=67b0b9fa9a226f71",
+      "output_min=0.0400695800781 max=0.97216796875 mean=0.229822219139 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "11644a54d0bc4d87845bc5a6a54d3e7080c6a99a4694ff0af8009489c231f0fb"
+  },
+  {
+    "case": "4-auto-1920",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=4 active=4",
+      "preset_frame=1 requested=auto active=1",
+      "output_fnv1a64=665657582215504a",
+      "output_min=0.0400695800781 max=0.97216796875 mean=0.229856763055 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "fd13803a72e1901cde6086e2fc307295f49f1d92ff33395d9834d3fa650e01ff"
+  },
+  {
+    "case": "4-4-3840",
+    "exit": 0,
+    "passed": true,
+    "reports": [
+      "preset_frame=0 requested=4 active=4",
+      "preset_frame=1 requested=4 active=4",
+      "output_fnv1a64=68ccbde470cd45f6",
+      "output_min=0.0399780273438 max=0.998046875 mean=0.219079412754 nonfinite=0",
+      "cleanup=begin",
+      "cleanup=provider-destroyed",
+      "cleanup=complete"
+    ],
+    "sha256": "2285e8a69868c5fc957fb14fdfc43a188850f42959c60e33032e22c95bb6af91"
+  }
+]

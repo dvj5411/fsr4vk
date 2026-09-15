@@ -12,6 +12,7 @@
 #include <vulkan/vulkan.h>
 
 #include "ffx_vk_device_requirements.h"
+#include "ffx_vk_preset_query.h"
 #include "vulkan_device_features.hpp"
 
 #include <algorithm>
@@ -58,11 +59,31 @@ struct ProviderContext {
     std::filesystem::path assets;
     std::map<std::string,std::unique_ptr<fsr4core::QualityContext>> cores;
     std::string active_preset;
+    std::uint32_t forced_preset = FSR4VK_PRESET_AUTO;
+    fsr4core::QualityContext* active_core = nullptr;
     uint32_t last_output_width=0,last_output_height=0;
     std::filesystem::path diagnostic_path;
     bool first_dispatch = true;
     bool sharpening_ignored_logged = false;
 };
+
+constexpr const char* presetName(std::uint32_t id) noexcept {
+    switch (id) {
+    case 0: return "native";
+    case 1: return "quality";
+    case 2: return "balanced";
+    case 3: return "performance";
+    case 4: return "drs";
+    case 5: return "ultraperf";
+    default: return nullptr;
+    }
+}
+
+const char* selectedPreset(const ProviderContext& context, uint32_t rw, uint32_t ow) {
+    return context.forced_preset == FSR4VK_PRESET_AUTO ? fsr4::resolution_preset(rw, ow,
+               (context.flags & FFX_UPSCALE_ENABLE_DYNAMIC_RESOLUTION) != 0)
+                                                     : presetName(context.forced_preset);
+}
 
 void diagnostic(const ProviderContext& context, const std::string& text) noexcept {
     try {
@@ -205,6 +226,26 @@ ffxReturnCode_t releaseVulkanDevice(ffxQueryDescVkReleaseDevice* query) noexcept
 
 ffxReturnCode_t queryUpscale(ffxContext* context, ffxQueryDescHeader* header) {
     switch (header->type) {
+    case FSR4VK_QUERY_DESC_TYPE_PRESET_CAPABILITIES: {
+        auto* query = reinterpret_cast<Fsr4VkQueryPresetCapabilities*>(header);
+        query->forcedPresetMask = 0;
+        if (!context || !*context) return FFX_API_RETURN_ERROR_PARAMETER;
+        query->forcedPresetMask = 0x3fu; // Presets 0 through 5, including DRS.
+        return FFX_API_RETURN_OK;
+    }
+    case FSR4VK_QUERY_DESC_TYPE_ACTIVE_PRESET: {
+        auto* query = reinterpret_cast<Fsr4VkQueryActivePreset*>(header);
+        query->activePreset = FSR4VK_PRESET_UNKNOWN;
+        if (!context || !*context) return FFX_API_RETURN_ERROR_PARAMETER;
+        const auto& preset = static_cast<ProviderContext*>(*context)->active_preset;
+        if (preset == "native") query->activePreset = 0;
+        else if (preset == "quality") query->activePreset = 1;
+        else if (preset == "balanced") query->activePreset = 2;
+        else if (preset == "performance") query->activePreset = 3;
+        else if (preset == "drs") query->activePreset = 4;
+        else if (preset == "ultraperf") query->activePreset = 5;
+        return FFX_API_RETURN_OK;
+    }
     case FFX_API_QUERY_DESC_TYPE_GET_PROVIDER_VERSION: {
         auto* query = reinterpret_cast<ffxQueryGetProviderVersion*>(header);
         if (!context || !*context) return FFX_API_RETURN_ERROR_PARAMETER;
@@ -325,7 +366,8 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
         if (const char* log=std::getenv("FSR4_VK_LOG_PATH"))
             provider->diagnostic_path=log;
         const uint32_t nms_flags = FFX_UPSCALE_ENABLE_DEPTH_INVERTED | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
-        const uint32_t permutation = create->flags & ~(FFX_UPSCALE_ENABLE_DEBUG_CHECKING | FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE);
+        const uint32_t permutation = create->flags & ~(FFX_UPSCALE_ENABLE_DEBUG_CHECKING | FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE |
+                                                        FFX_UPSCALE_ENABLE_DYNAMIC_RESOLUTION);
         fsr4::validate_dimensions(create->maxRenderSize.width,create->maxRenderSize.height,
                                  create->maxUpscaleSize.width,create->maxUpscaleSize.height);
         if(permutation!=nms_flags)
@@ -360,6 +402,16 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxConfigure(
     ffxContext* context,
     const ffxConfigureDescHeader* header) {
     if (!context || !*context || !header) return FFX_API_RETURN_ERROR_PARAMETER;
+    if (header->type == FSR4VK_CONFIGURE_DESC_TYPE_PRESET) {
+        const auto preset = reinterpret_cast<const Fsr4VkConfigurePreset*>(header)->preset;
+        if (preset != FSR4VK_PRESET_AUTO && !presetName(preset))
+            return FFX_API_RETURN_ERROR_PARAMETER;
+        // No allocations or resource destruction: cached cores may still be in
+        // flight. Dispatch lazily creates the chosen model and resets history
+        // when active_preset changes. Reporting stays tied to actual dispatch.
+        static_cast<ProviderContext*>(*context)->forced_preset = preset;
+        return FFX_API_RETURN_OK;
+    }
     if (header->type == FFX_API_CONFIGURE_DESC_TYPE_UPSCALE_KEYVALUE) return FFX_API_RETURN_OK;
     return FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
 }
@@ -434,17 +486,22 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         if(rw>provider->maxRenderSize.width || rh>provider->maxRenderSize.height ||
            ow>provider->maxUpscaleSize.width || oh>provider->maxUpscaleSize.height)
             throw std::invalid_argument("dispatch dimensions exceed context capacity");
-        const std::string selected_preset=fsr4::resolution_preset(rw,ow);
-        auto& core=provider->cores[selected_preset];
+        const std::string selected_preset=selectedPreset(*provider,rw,ow);
+        // Repeated dispatches use the same owned core without a map lookup.
+        // std::map keeps the other cores alive; switching never frees in-flight work.
+        auto* core=provider->active_preset==selected_preset ? provider->active_core : nullptr;
+        if (!core) core=provider->cores[selected_preset].get();
         if(!core) {
             const auto bucket=provider->maxUpscaleSize.width>1920 || provider->maxUpscaleSize.height>1080 ? "2160" : "1080";
             const auto bundle=provider->assets/"general"/bucket/selected_preset;
-            core=std::make_unique<fsr4core::QualityContext>(provider->physicalDevice,provider->device,
+            auto created=std::make_unique<fsr4core::QualityContext>(provider->physicalDevice,provider->device,
                 bundle,bundle/"initializers.bin",bundle/"weights.bin",true,
                 provider->getDeviceProcAddr,
                 provider->maxRenderSize.width,provider->maxRenderSize.height,
                 provider->maxUpscaleSize.width,provider->maxUpscaleSize.height,
                 provider->apiVersion);
+            core=created.get();
+            provider->cores[selected_preset]=std::move(created);
         }
         const bool force_reset=provider->active_preset!=selected_preset ||
                                provider->last_output_width!=ow ||
@@ -491,8 +548,10 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                              "FSR4 Vulkan replaced invalid pre-exposure with 1.0");
         core->record(static_cast<VkCommandBuffer>(d.commandList),color,depth,motion,exposure,output,c);
         provider->active_preset=selected_preset;
+        provider->active_core=core;
         provider->last_output_width=ow;provider->last_output_height=oh;
         if (provider->first_dispatch) {
+            diagnostic(*provider,"preset="+selected_preset);
             diagnostic(*provider, std::string("shader_backend=") + core->shader_backend());
             diagnostic(*provider,"first dispatch recorded: "+std::to_string(rw)+"x"+
                 std::to_string(rh)+" -> "+std::to_string(ow)+"x"+std::to_string(oh));
