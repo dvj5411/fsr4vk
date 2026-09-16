@@ -2,6 +2,7 @@
 #include "quality-recorder.hpp"
 #include "embedded-assets.hpp"
 #include "vulkan-compat.hpp"
+#include "external-exposure-spv.hpp"
 #include "../provider/vulkan_device_features.hpp"
 #include <algorithm>
 #include <cstring>
@@ -58,6 +59,10 @@ static_assert(sizeof(OptimizedConstants) == 104);
 
 inline void check(VkResult result, const char* operation) {
     if (result != VK_SUCCESS) {
+        if (result == VK_ERROR_FEATURE_NOT_PRESENT || result == VK_ERROR_EXTENSION_NOT_PRESENT)
+            throw std::runtime_error(std::string("FSR4VK_ERROR_MISSING_DEVICE_FEATURES: ")+
+                operation+" returned VkResult "+std::to_string(result)+
+                "; enable the required Vulkan extensions/features in the host before vkCreateDevice");
         throw std::runtime_error(std::string(operation) + " failed with VkResult " +
                                  std::to_string(result));
     }
@@ -227,6 +232,7 @@ class QualityContext {
     std::vector<uint8_t> weights;
     bool initialized = false;
     bool nms_inputs = false;
+    bool external_exposure = false;
     bool native_mixed_dot = false;
     VkQueryPool profile_queries{};
     double timestamp_period = 0;
@@ -288,11 +294,16 @@ public:
                    uint32_t max_input_height,
                    uint32_t max_output_width,
                    uint32_t max_output_height,
-                   uint32_t api_version)
+                   uint32_t api_version,
+                   bool external_exposure_input = false)
         : physical_device(physical), device(logical),
           get_device_proc_addr(get_device_proc_addr),
-          dispatch(logical, get_device_proc_addr, api_version), nms_inputs(nms) {
+          dispatch(logical, get_device_proc_addr, api_version), nms_inputs(nms),
+          external_exposure(external_exposure_input) {
       try {
+        fsr4vk::validate_descriptor_commands(device,get_device_proc_addr);
+        if(external_exposure && !nms_inputs)
+            throw std::invalid_argument("external exposure adapter requires general model layout");
         native_mixed_dot = fsr4vk::supportsNativeMixedDot(
             physical, vkGetPhysicalDeviceFeatures2, vkEnumerateDeviceExtensionProperties);
         if (const char* path=std::getenv("FSR4_VK_PROFILE_PATH")) {
@@ -433,7 +444,9 @@ public:
                                            : std::string(pass.hash)+".spv";
             if (!native_mixed_dot)
                 name.insert(name.size() - 4, ".portable");
-            const auto code = read_spirv(shader_dir / name);
+            const auto code = external_exposure && index==14
+                ? std::vector<std::uint32_t>(std::begin(kExternalExposureSpv),std::end(kExternalExposureSpv))
+                : read_spirv(shader_dir / name);
             VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
             module_info.codeSize = code.size() * sizeof(std::uint32_t);
             module_info.pCode = code.data();
@@ -596,9 +609,11 @@ public:
         }
         for (auto view : frame.views) vkDestroyImageView(device,view,nullptr);
         frame.views.clear();
-        frame.views.reserve(5);
+        frame.views.reserve(6);
+        Image supplied_exposure = exposure_image;
         if (nms_inputs) exposure_image = images[3];
-        for (auto* image : {&color,&depth,&motion,&exposure_image,&output}) {
+        for (auto* image : {&color,&depth,&motion,&exposure_image,&output,
+                           external_exposure ? &supplied_exposure : &exposure_image}) {
             if (!image->view) {
                 VkImageViewCreateInfo vi{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
                 vi.image=image->image; vi.viewType=VK_IMAGE_VIEW_TYPE_2D; vi.format=image->format;
@@ -724,7 +739,8 @@ public:
             write_image_descriptor_buffer(90,VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,images[4].view);
             write_image_descriptor_buffer(91,VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,images[5].view);
             write_image_descriptor_buffer(92,VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,images[3].view);
-            write_image_descriptor_buffer(93,VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,color.view);
+            write_image_descriptor_buffer(93,VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                                          external_exposure ? supplied_exposure.view : color.view);
         }
 
         for (const auto index : {
@@ -817,8 +833,8 @@ public:
                 vkCmdResetQueryPool(command_buffer,profile_queries,0,30);
                 dispatch.cmd_write_timestamp2(command_buffer,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,profile_queries,0);
             }
-            vkCmdDispatch(command_buffer,(main_constants.width_lr+63)/64,
-                          (main_constants.height_lr+63)/64,1);
+            vkCmdDispatch(command_buffer,external_exposure ? 1 : (main_constants.width_lr+63)/64,
+                          external_exposure ? 1 : (main_constants.height_lr+63)/64,1);
             if (profile_queries) dispatch.cmd_write_timestamp2(
                 command_buffer,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,profile_queries,1);
             image_barrier(dispatch.cmd_pipeline_barrier2,command_buffer,images[3].image,VK_IMAGE_LAYOUT_GENERAL,

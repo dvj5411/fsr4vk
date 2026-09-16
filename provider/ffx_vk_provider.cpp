@@ -64,6 +64,7 @@ struct ProviderContext {
     uint32_t last_output_width=0,last_output_height=0;
     std::filesystem::path diagnostic_path;
     bool first_dispatch = true;
+    bool device_support_checked = false;
     bool sharpening_ignored_logged = false;
 };
 
@@ -365,20 +366,35 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
         }
         if (const char* log=std::getenv("FSR4_VK_LOG_PATH"))
             provider->diagnostic_path=log;
-        const uint32_t nms_flags = FFX_UPSCALE_ENABLE_DEPTH_INVERTED | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
+#if defined(_WIN32) && defined(FSR4_EMBEDDED_ASSETS)
+        else if (embedded) {
+            // Store-packaged game directories may be read-only. Keep crash
+            // breadcrumbs in the user's writable temp directory by default.
+            std::error_code ec;
+            auto temp=std::filesystem::temp_directory_path(ec);
+            if (!ec) provider->diagnostic_path=temp/("fsr4vk-provider-"+
+                std::to_string(GetCurrentProcessId())+".log");
+        }
+#endif
+        diagnostic(*provider,"context request flags="+std::to_string(create->flags)+
+                   " max_render="+std::to_string(create->maxRenderSize.width)+"x"+
+                   std::to_string(create->maxRenderSize.height)+" max_output="+
+                   std::to_string(create->maxUpscaleSize.width)+"x"+
+                   std::to_string(create->maxUpscaleSize.height));
+        const uint32_t required_flags = FFX_UPSCALE_ENABLE_DEPTH_INVERTED;
         const uint32_t permutation = create->flags & ~(FFX_UPSCALE_ENABLE_DEBUG_CHECKING | FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE |
-                                                        FFX_UPSCALE_ENABLE_DYNAMIC_RESOLUTION);
+                                                        FFX_UPSCALE_ENABLE_DYNAMIC_RESOLUTION | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE);
         fsr4::validate_dimensions(create->maxRenderSize.width,create->maxRenderSize.height,
                                  create->maxUpscaleSize.width,create->maxUpscaleSize.height);
-        if(permutation!=nms_flags)
-            throw std::invalid_argument("provider requires inverted depth and auto exposure");
-        if (!backend->getDeviceProcAddr(backend->device,"vkGetDescriptorEXT"))
-            throw std::invalid_argument("descriptor buffer extension must be enabled on caller device");
+        if(permutation!=required_flags)
+            throw std::invalid_argument("provider requires inverted depth, low-resolution non-jittered motion vectors and linear color");
+        fsr4vk::validate_descriptor_commands(backend->device,backend->getDeviceProcAddr);
+        (void)fsr4vk::DeviceDispatch(backend->device,backend->getDeviceProcAddr,provider->apiVersion);
         diagnostic(*provider,"context created flags="+std::to_string(create->flags)+
                    " api="+std::to_string(VK_API_VERSION_MAJOR(provider->apiVersion))+"."+
                    std::to_string(VK_API_VERSION_MINOR(provider->apiVersion)));
     } catch (const std::exception& error) {
-        diagnostic(*provider,std::string("context rejected: ")+error.what());
+        provider_message(*provider,FFX_API_MESSAGE_TYPE_ERROR,std::string("context rejected: ")+error.what());
         provider->~ProviderContext();
         deallocate(callbacks,provider);
         return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
@@ -492,6 +508,27 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         auto* core=provider->active_preset==selected_preset ? provider->active_core : nullptr;
         if (!core) core=provider->cores[selected_preset].get();
         if(!core) {
+            if (!provider->device_support_checked) {
+                // This queries physical support, NOT the bits enabled on the
+                // application's already-created VkDevice. Vulkan exposes no
+                // general post-creation query for those bits.
+                VkPhysicalDeviceProperties properties{};
+                vkGetPhysicalDeviceProperties(provider->physicalDevice,&properties);
+                VkDeviceCreateInfo empty{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+                try {
+                    fsr4vk::DeviceFeatures supported(provider->physicalDevice,empty,properties.apiVersion,
+                        vkGetPhysicalDeviceFeatures2,vkEnumerateDeviceExtensionProperties);
+                } catch(const std::exception& error) {
+                    throw std::runtime_error(std::string("FSR4VK_ERROR_DEVICE_CAPABILITY_CHECK: ")+error.what()+
+                        "; check GPU/driver support; unsupported capabilities cannot be enabled by the provider");
+                }
+                diagnostic(*provider,"physical capability check passed; enabled feature bits cannot be queried after vkCreateDevice. "
+                    "Host must enable descriptorBindingVariableDescriptorCount, mutableDescriptorType, computeDerivativeGroupLinear, "
+                    "shaderIntegerDotProduct and other required shader features; vulkanMemoryModel requires device scope when enabled.");
+                provider->device_support_checked=true;
+            }
+            diagnostic(*provider,"creating model="+selected_preset+
+                       " exposure="+((provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE) ? "auto" : "external"));
             const auto bucket=provider->maxUpscaleSize.width>1920 || provider->maxUpscaleSize.height>1080 ? "2160" : "1080";
             const auto bundle=provider->assets/"general"/bucket/selected_preset;
             auto created=std::make_unique<fsr4core::QualityContext>(provider->physicalDevice,provider->device,
@@ -499,9 +536,11 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                 provider->getDeviceProcAddr,
                 provider->maxRenderSize.width,provider->maxRenderSize.height,
                 provider->maxUpscaleSize.width,provider->maxUpscaleSize.height,
-                provider->apiVersion);
+                provider->apiVersion,
+                (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0);
             core=created.get();
             provider->cores[selected_preset]=std::move(created);
+            diagnostic(*provider,"model ready="+selected_preset);
         }
         const bool force_reset=provider->active_preset!=selected_preset ||
                                provider->last_output_width!=ow ||

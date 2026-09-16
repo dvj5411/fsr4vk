@@ -1,0 +1,196 @@
+diff --git a/OptiScaler/spoofing/Vulkan_Fsr4_Compat.h b/OptiScaler/spoofing/Vulkan_Fsr4_Compat.h
+new file mode 100644
+index 00000000..87bb3a7b
+--- /dev/null
++++ b/OptiScaler/spoofing/Vulkan_Fsr4_Compat.h
+@@ -0,0 +1,18 @@
++#pragma once
++#include <vulkan/vulkan_core.h>
++
++// Khronos ABI compatibility for Vulkan headers predating the optional RADV
++// mixed-dot backend. Native Windows AMD/NVIDIA use the portable INT8 backend.
++#ifndef VK_VALVE_shader_mixed_float_dot_product
++#define VK_VALVE_SHADER_MIXED_FLOAT_DOT_PRODUCT_EXTENSION_NAME "VK_VALVE_shader_mixed_float_dot_product"
++#define VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MIXED_FLOAT_DOT_PRODUCT_FEATURES_VALVE static_cast<VkStructureType>(1000673000)
++struct VkPhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE
++{
++    VkStructureType sType;
++    void* pNext;
++    VkBool32 shaderMixedFloatDotProductFloat16AccFloat32;
++    VkBool32 shaderMixedFloatDotProductFloat16AccFloat16;
++    VkBool32 shaderMixedFloatDotProductBFloat16Acc;
++    VkBool32 shaderMixedFloatDotProductFloat8AccFloat32;
++};
++#endif
+diff --git a/OptiScaler/spoofing/Vulkan_Spoofing.cpp b/OptiScaler/spoofing/Vulkan_Spoofing.cpp
+index ad0546d7..5d046675 100644
+--- a/OptiScaler/spoofing/Vulkan_Spoofing.cpp
++++ b/OptiScaler/spoofing/Vulkan_Spoofing.cpp
+@@ -13,6 +13,7 @@
+ 
+ #include <vulkan/vulkan_core.h>
+ #include <misc/IdentifyGpu.h>
++#include "Vulkan_Fsr4_Compat.h"
+ 
+ static std::map<std::string, bool> vkDeviceExtensions;
+ static std::map<std::string, bool> vkInstanceExtensions;
+@@ -422,6 +423,21 @@ struct VulkanDeviceFeatureState::Impl
+     VkPhysicalDeviceCooperativeMatrix2FeaturesNV cooperativeMatrix2 {
+         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_2_FEATURES_NV
+     };
++    VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableDescriptorType {
++        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT
++    };
++    VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR computeDerivatives {
++        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR
++    };
++    VkPhysicalDeviceShaderIntegerDotProductFeatures integerDot {
++        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES
++    };
++    VkPhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE mixedDot {
++        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MIXED_FLOAT_DOT_PRODUCT_FEATURES_VALVE
++    };
++    VkPhysicalDeviceShaderFloatControls2Features floatControls2 {
++        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT_CONTROLS_2_FEATURES
++    };
+ 
+     Impl(VkDeviceCreateInfo* pCreateInfo, PFN_vkGetPhysicalDeviceFeatures2 getFeatures2)
+         : pCreateInfo(pCreateInfo), getFeatures2(getFeatures2)
+@@ -492,6 +508,8 @@ struct VulkanDeviceFeatureState::Impl
+         if (auto* features = FindFeatureStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2))
+         {
+             EnableSupportedFeature(features->features.shaderInt16, supported.features.shaderInt16);
++            EnableSupportedFeature(features->features.shaderStorageImageReadWithoutFormat,
++                                   supported.features.shaderStorageImageReadWithoutFormat);
+             EnableSupportedFeature(features->features.shaderStorageImageWriteWithoutFormat,
+                                    supported.features.shaderStorageImageWriteWithoutFormat);
+             return;
+@@ -502,6 +520,8 @@ struct VulkanDeviceFeatureState::Impl
+ 
+         if (supported.features.shaderInt16 == VK_TRUE)
+             coreFeatures.shaderInt16 = VK_TRUE;
++        if (supported.features.shaderStorageImageReadWithoutFormat == VK_TRUE)
++            coreFeatures.shaderStorageImageReadWithoutFormat = VK_TRUE;
+ 
+         if (supported.features.shaderStorageImageWriteWithoutFormat == VK_TRUE)
+             coreFeatures.shaderStorageImageWriteWithoutFormat = VK_TRUE;
+@@ -529,6 +549,14 @@ struct VulkanDeviceFeatureState::Impl
+             if (SupportsExtension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME))
+             {
+                 EnableSupportedFeature(features->runtimeDescriptorArray, supported.runtimeDescriptorArray);
++                EnableSupportedFeature(features->descriptorBindingVariableDescriptorCount,
++                                       supported.descriptorBindingVariableDescriptorCount);
++                EnableSupportedFeature(features->shaderSampledImageArrayNonUniformIndexing,
++                                       supported.shaderSampledImageArrayNonUniformIndexing);
++                EnableSupportedFeature(features->shaderStorageImageArrayNonUniformIndexing,
++                                       supported.shaderStorageImageArrayNonUniformIndexing);
++                EnableSupportedFeature(features->shaderStorageBufferArrayNonUniformIndexing,
++                                       supported.shaderStorageBufferArrayNonUniformIndexing);
+                 EnableSupportedFeature(features->descriptorBindingPartiallyBound,
+                                        supported.descriptorBindingPartiallyBound);
+             }
+@@ -537,7 +565,10 @@ struct VulkanDeviceFeatureState::Impl
+                 EnableSupportedFeature(features->bufferDeviceAddress, supported.bufferDeviceAddress);
+ 
+             if (SupportsExtension(VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME))
++            {
+                 EnableSupportedFeature(features->vulkanMemoryModel, supported.vulkanMemoryModel);
++                EnableSupportedFeature(features->vulkanMemoryModelDeviceScope, supported.vulkanMemoryModelDeviceScope);
++            }
+ 
+             return;
+         }
+@@ -556,6 +587,10 @@ struct VulkanDeviceFeatureState::Impl
+             EnableFeatureStruct(physicalDevice, descriptorIndexing,
+                                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+                                 &VkPhysicalDeviceDescriptorIndexingFeatures::runtimeDescriptorArray,
++                                &VkPhysicalDeviceDescriptorIndexingFeatures::descriptorBindingVariableDescriptorCount,
++                                &VkPhysicalDeviceDescriptorIndexingFeatures::shaderSampledImageArrayNonUniformIndexing,
++                                &VkPhysicalDeviceDescriptorIndexingFeatures::shaderStorageImageArrayNonUniformIndexing,
++                                &VkPhysicalDeviceDescriptorIndexingFeatures::shaderStorageBufferArrayNonUniformIndexing,
+                                 &VkPhysicalDeviceDescriptorIndexingFeatures::descriptorBindingPartiallyBound);
+ 
+         if (SupportsExtension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
+@@ -566,7 +601,8 @@ struct VulkanDeviceFeatureState::Impl
+         if (SupportsExtension(VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME))
+             EnableFeatureStruct(physicalDevice, vulkanMemoryModel,
+                                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES,
+-                                &VkPhysicalDeviceVulkanMemoryModelFeatures::vulkanMemoryModel);
++                                &VkPhysicalDeviceVulkanMemoryModelFeatures::vulkanMemoryModel,
++                                &VkPhysicalDeviceVulkanMemoryModelFeatures::vulkanMemoryModelDeviceScope);
+     }
+ 
+     void EnableVulkan13Features(VkPhysicalDevice physicalDevice)
+@@ -579,6 +615,8 @@ struct VulkanDeviceFeatureState::Impl
+ 
+             if (SupportsExtension(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME))
+                 EnableSupportedFeature(features->synchronization2, supported.synchronization2);
++            if (SupportsExtension(VK_KHR_SHADER_INTEGER_DOT_PRODUCT_EXTENSION_NAME))
++                EnableSupportedFeature(features->shaderIntegerDotProduct, supported.shaderIntegerDotProduct);
+ 
+             if (SupportsExtension(VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME))
+             {
+@@ -594,6 +632,11 @@ struct VulkanDeviceFeatureState::Impl
+                                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+                                 &VkPhysicalDeviceSynchronization2Features::synchronization2);
+ 
++        if (SupportsExtension(VK_KHR_SHADER_INTEGER_DOT_PRODUCT_EXTENSION_NAME))
++            EnableFeatureStruct(physicalDevice, integerDot,
++                                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_INTEGER_DOT_PRODUCT_FEATURES,
++                                &VkPhysicalDeviceShaderIntegerDotProductFeatures::shaderIntegerDotProduct);
++
+         if (SupportsExtension(VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME))
+             EnableFeatureStruct(physicalDevice, subgroupSizeControl,
+                                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES,
+@@ -603,6 +646,34 @@ struct VulkanDeviceFeatureState::Impl
+ 
+     void EnableExtensionFeatures(VkPhysicalDevice physicalDevice)
+     {
++        if (SupportsExtension(VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME))
++            EnableFeatureStruct(physicalDevice, mutableDescriptorType,
++                                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT,
++                                &VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT::mutableDescriptorType);
++        if (SupportsExtension(VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME))
++            EnableFeatureStruct(physicalDevice, computeDerivatives,
++                                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR,
++                                &VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR::computeDerivativeGroupLinear);
++        if (SupportsExtension(VK_VALVE_SHADER_MIXED_FLOAT_DOT_PRODUCT_EXTENSION_NAME))
++        {
++            EnableFeatureStruct(physicalDevice, mixedDot,
++                                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MIXED_FLOAT_DOT_PRODUCT_FEATURES_VALVE,
++                                &VkPhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE::shaderMixedFloatDotProductFloat16AccFloat32);
++            if (SupportsExtension(VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME))
++            {
++                if (auto* features = FindFeatureStruct<VkPhysicalDeviceVulkan14Features>(
++                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES))
++                {
++                    const auto supported = GetSupportedFeatureStruct<VkPhysicalDeviceVulkan14Features>(
++                        physicalDevice, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES);
++                    EnableSupportedFeature(features->shaderFloatControls2, supported.shaderFloatControls2);
++                }
++                else
++                    EnableFeatureStruct(physicalDevice, floatControls2,
++                                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT_CONTROLS_2_FEATURES,
++                                        &VkPhysicalDeviceShaderFloatControls2Features::shaderFloatControls2);
++            }
++        }
+         if (SupportsExtension(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
+             EnableFeatureStruct(physicalDevice, descriptorBuffer,
+                                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
+@@ -782,11 +853,16 @@ VkResult VulkanSpoofing::hkvkCreateDevice(VkPhysicalDevice physicalDevice, VkDev
+             VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME, VK_KHR_8BIT_STORAGE_EXTENSION_NAME,
+             VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+             VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME, VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
++            VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME, VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,
++            VK_KHR_SHADER_INTEGER_DOT_PRODUCT_EXTENSION_NAME,
+         };
+ 
+         for (const auto* extension : ffxFeatureExtensions)
+             addExtension(extension);
+ 
++        if (addExtension(VK_VALVE_SHADER_MIXED_FLOAT_DOT_PRODUCT_EXTENSION_NAME))
++            addExtension(VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME);
++
+         featureState->impl->EnableFeatures(physicalDevice);
+     }
+ 

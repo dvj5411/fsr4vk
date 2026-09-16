@@ -35,6 +35,11 @@ struct CreateBackendVkDesc {
 namespace fs = std::filesystem;
 
 namespace {
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL test_device_proc(VkDevice device,const char* name) {
+    const char* missing=std::getenv("FSR4_TEST_MISSING_COMMAND");
+    if(missing && std::strcmp(missing,name)==0)return nullptr;
+    return vkGetDeviceProcAddr(device,name);
+}
 using fsr4::kPasses;
 
 PFN_vkCmdPipelineBarrier2 command_pipeline_barrier2 = nullptr;
@@ -489,7 +494,13 @@ int main(int argc, char** argv) {
         fsr4vk::DeviceFeatures enabled_features(
             physical_device, device_info, application.apiVersion,
             vkGetPhysicalDeviceFeatures2, vkEnumerateDeviceExtensionProperties);
-        check(vkCreateDevice(physical_device, enabled_features.get(), nullptr, &device),
+#ifdef FSR4_TEST_PR1161_FEATURES
+        Pr1161DeviceFeatures pr_features(physical_device,device_info);
+        const auto* device_create_info=pr_features.get();
+#else
+        const auto* device_create_info=enabled_features.get();
+#endif
+        check(vkCreateDevice(physical_device, device_create_info, nullptr, &device),
               "vkCreateDevice");
 
         const fsr4vk::DeviceDispatch promoted_dispatch(
@@ -787,7 +798,8 @@ int main(int argc, char** argv) {
         std::memcpy(staging_bytes, color_data, color_size);
         std::memcpy(staging_bytes + color_size, frame.depth.data(), depth_size);
         std::memcpy(staging_bytes + color_size + depth_size, frame.motion.data(), motion_size);
-        const float exposure = 1.0f;
+        const bool external_exposure_test = std::getenv("FSR4_TEST_EXTERNAL_EXPOSURE") != nullptr;
+        const float exposure = external_exposure_test ? std::stof(std::getenv("FSR4_TEST_EXTERNAL_EXPOSURE")) : 1.0f;
         std::memcpy(staging_bytes + exposure_offset, &exposure, sizeof(exposure));
         const VkDeviceSize output_size =
             static_cast<VkDeviceSize>(kOutputWidth) * kOutputHeight * 8;
@@ -1097,7 +1109,7 @@ int main(int argc, char** argv) {
             d.depth=resource(depth,FFX_API_SURFACE_FORMAT_R32_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
             d.motionVectors=resource(motion,FFX_API_SURFACE_FORMAT_R16G16_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
             d.exposure=resource(exposure_image,FFX_API_SURFACE_FORMAT_R32_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
-            if (nms_inputs) d.exposure={};
+            if (nms_inputs && !external_exposure_test) d.exposure={};
             d.output=resource(output,FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
             if (game_formats) {
                 d.color.description.format=doom_formats ? FFX_API_SURFACE_FORMAT_R9G9B9E5_SHAREDEXP :
@@ -1152,11 +1164,13 @@ int main(int argc, char** argv) {
         };
         if (use_context) {
             if (use_provider) {
-                CreateBackendVkDesc backend{{3,nullptr},device,physical_device,vkGetDeviceProcAddr};
+                CreateBackendVkDesc backend{{3,nullptr},device,physical_device,test_device_proc};
                 ffxCreateContextDescUpscale create{};
                 create.header={FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE,&backend.header};
+                create.fpMessage=[](uint32_t,const wchar_t* message){std::wcerr<<L"provider_message="<<message<<L'\n';};
                 create.maxRenderSize={kRenderWidth,kRenderHeight}; create.maxUpscaleSize={kOutputWidth,kOutputHeight};
                 if (nms_inputs) create.flags=FFX_UPSCALE_ENABLE_DEPTH_INVERTED | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
+                if (external_exposure_test) create.flags &= ~FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
                 if (game_formats) create.flags |= FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE;
                 if(ffxCreateContext(&api_context,&create.header,nullptr)!=FFX_API_RETURN_OK)
                     throw std::runtime_error("provider creation failed");

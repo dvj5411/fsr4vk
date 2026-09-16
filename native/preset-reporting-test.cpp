@@ -32,6 +32,13 @@ VKAPI_ATTR VkResult VKAPI_CALL vkGetQueryPoolResults(
 }
 
 namespace {
+const char* missingCommand=nullptr;
+std::wstring lastMessage;
+void messageCallback(uint32_t,const wchar_t* text){lastMessage=text;}
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL mockDeviceProc(VkDevice,const char* name) {
+    if(missingCommand && std::strcmp(name,missingCommand)==0)return nullptr;
+    return reinterpret_cast<PFN_vkVoidFunction>(&mockDeviceProc);
+}
 unsigned query_calls = 0;
 ffxReturnCode_t mock_result = FFX_API_RETURN_OK;
 uint32_t mock_preset = FSR4VK_PRESET_UNKNOWN;
@@ -55,6 +62,38 @@ ffxReturnCode_t mockQuery(ffxContext*, ffxQueryDescHeader* header) {
 }
 
 int main() {
+    // Regression for the Endfield flags in the Windows field log: inverted
+    // depth + HDR + external exposure must create without allocating GPU work.
+    const auto test_assets=std::filesystem::current_path()/"build/preset-reporting-test/context-assets";
+    std::filesystem::create_directories(test_assets/"general");
+    setenv("FSR4_VK_ASSET_ROOT",test_assets.c_str(),1);
+    CreateBackendVkDesc backend{{3,nullptr},reinterpret_cast<VkDevice>(1),
+        reinterpret_cast<VkPhysicalDevice>(2),mockDeviceProc};
+    ffxCreateContextDescUpscale create{};
+    create.header={FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE,&backend.header};
+    create.flags=FFX_UPSCALE_ENABLE_DEPTH_INVERTED|FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE;
+    create.maxRenderSize={1704,958};create.maxUpscaleSize={2560,1440};
+    ffxContext external{};
+    assert(ffxCreateContext(&external,&create.header,nullptr)==FFX_API_RETURN_OK);
+    assert((static_cast<ProviderContext*>(external)->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0);
+    assert(ffxDestroyContext(&external,nullptr)==FFX_API_RETURN_OK);
+    create.fpMessage=messageCallback;
+    missingCommand="vkCmdBindDescriptorBuffersEXT";
+    assert(ffxCreateContext(&external,&create.header,nullptr)==FFX_API_RETURN_ERROR_RUNTIME_ERROR);
+    assert(external==nullptr);
+    assert(lastMessage.find(L"FSR4VK_ERROR_MISSING_DEVICE_FEATURES")!=std::wstring::npos);
+    assert(lastMessage.find(L"vkCmdBindDescriptorBuffersEXT")!=std::wstring::npos);
+    missingCommand=nullptr;
+    try {fsr4core::check(VK_ERROR_FEATURE_NOT_PRESENT,"test pipeline");assert(false);}
+    catch(const std::runtime_error& e){assert(std::string(e.what()).find("FSR4VK_ERROR_MISSING_DEVICE_FEATURES")!=std::string::npos);}
+    try {fsr4core::check(VK_ERROR_OUT_OF_DEVICE_MEMORY,"test allocation");assert(false);}
+    catch(const std::runtime_error& e){assert(std::string(e.what()).find("FSR4VK_ERROR_MISSING_DEVICE_FEATURES")==std::string::npos);}
+    create.flags|=FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
+    assert(ffxCreateContext(&external,&create.header,nullptr)==FFX_API_RETURN_OK);
+    assert(ffxDestroyContext(&external,nullptr)==FFX_API_RETURN_OK);
+    create.flags|=FFX_UPSCALE_ENABLE_MOTION_VECTORS_JITTER_CANCELLATION;
+    assert(ffxCreateContext(&external,&create.header,nullptr)==FFX_API_RETURN_ERROR_RUNTIME_ERROR);
+    assert(external==nullptr);
     static_assert(std::is_standard_layout_v<Fsr4VkQueryActivePreset>);
     static_assert(offsetof(Fsr4VkQueryActivePreset, header) == 0);
     static_assert(offsetof(Fsr4VkQueryActivePreset, activePreset) == sizeof(ffxQueryDescHeader));

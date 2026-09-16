@@ -21,7 +21,7 @@ load_device_function(VkDevice device,
       return reinterpret_cast<Function>(function);
     }
   }
-  std::string message = "missing Vulkan device entry point: ";
+  std::string message = "FSR4VK_ERROR_MISSING_DEVICE_FEATURES: missing Vulkan device entry point: ";
   bool first = true;
   for (const char *name : names) {
     if (!first)
@@ -29,7 +29,15 @@ load_device_function(VkDevice device,
     message += name;
     first = false;
   }
+  message += "; the host must enable the required Vulkan extensions/features before vkCreateDevice";
   throw std::runtime_error(message);
+}
+
+inline void validate_descriptor_commands(VkDevice device, PFN_vkGetDeviceProcAddr get) {
+  for (const char* name : {"vkGetDescriptorEXT", "vkGetDescriptorSetLayoutSizeEXT",
+       "vkGetDescriptorSetLayoutBindingOffsetEXT", "vkCmdBindDescriptorBuffersEXT",
+       "vkCmdSetDescriptorBufferOffsetsEXT", "vkCmdBindDescriptorBufferEmbeddedSamplersEXT"})
+    (void)load_device_function<PFN_vkVoidFunction>(device,get,{name});
 }
 
 template <typename Function>

@@ -82,6 +82,16 @@ active-model lookup bypass; shader spill experiments remain excluded.
 See [preset control](provider/PRESET-CONTROL.md) and the
 [manual upstream OptiScaler patch](provider/optiscaler-preset-control-upstream.patch).
 
+Release 0.3.2.3 accepts contexts with auto exposure disabled and consumes the
+game's external exposure input. It also adds specific diagnostics for detectable
+missing Vulkan device-feature/command failures. Shader-only enabled feature bits
+cannot generally be queried after device creation: the host must still enable
+the complete feature set. See the [Windows field diagnosis and validation
+limits](provider/WINDOWS-FIELD-FIXES.md) and the separate
+[manual PR #1161 device-feature patch](provider/optiscaler-pr1161-device-features.patch).
+The bundled custom OptiScaler DLL is unchanged from 0.3.2.2; it is not a new build
+of upstream PR #1161.
+
 ## Build OptiScaler
 
 Open `optiscaler/OptiScaler.sln` in Visual Studio 2022 and build the `Release`

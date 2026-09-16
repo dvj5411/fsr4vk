@@ -1,4 +1,4 @@
-EXPERIMENTAL FSR4.0.2 VK IMPLEMENTATION — RELEASE 0.3.2.2
+EXPERIMENTAL FSR4.0.2 VK IMPLEMENTATION — RELEASE 0.3.2.3
 THINGS WILL BREAK! IF YOU FIND A PROBLEM, @de_w23 ON THE OPTISCALER DISCORD!
 
 Requirements:
@@ -17,3 +17,5 @@ Instructions on usage:
 
 Experimental direct drop-in:
 The self-contained upscaler DLL may theoretically be renamed to amd_fidelityfx_vk.dll and used without the custom OptiScaler build. Back up the original DLL first.
+
+Diagnostics: embedded Windows builds write fsr4vk-provider-<pid>.log in %TEMP% by default. FSR4_VK_LOG_PATH can override this location.

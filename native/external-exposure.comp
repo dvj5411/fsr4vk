@@ -1,0 +1,13 @@
+#version 450
+#extension GL_EXT_samplerless_texture_functions : require
+// Adapt the SDK external-exposure contract to the captured auto-exposure
+// model's t17 input, without recomputing exposure from scene luminance.
+// Slots match the existing SPD descriptor table. Both aliases share the
+// mutable image heap; they access different descriptors.
+layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
+layout(set=1,binding=1) uniform texture2D sourceImages[128];
+layout(set=1,binding=1,r32f) uniform writeonly image2D destinationImages[128];
+void main() {
+    float exposure=texelFetch(sourceImages[93],ivec2(0),0).r;
+    imageStore(destinationImages[92],ivec2(0),vec4(exposure==0.0 ? 1.0 : exposure));
+}
