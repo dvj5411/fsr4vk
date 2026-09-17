@@ -17,11 +17,15 @@ and Ultra Performance retain their existing ratio-based selection. There is no
 ratio threshold that automatically selects DRS.
 
 The existing resource/flag restrictions still apply: low-resolution motion
-vectors, inverted depth, auto exposure, no optional masks, and inputs whose
+vectors, inverted depth, and inputs whose
 resource extents match the dispatched render extent. The tests change input
 resources after GPU completion while retaining the upscaler context. They do
 not establish subrect rendering into oversized input textures, changing output
 resolution, or long-running game stability.
+
+Auto and external exposure are supported. Optional reactive/transparency masks
+are accepted for host compatibility but not consumed by the current model path;
+their presence emits one warning per context instead of failing dispatch.
 
 Preset 4 may also be forced through the optional preset-control descriptor,
 independently of the DRS context flag. Auto restores the flag/ratio behavior above.

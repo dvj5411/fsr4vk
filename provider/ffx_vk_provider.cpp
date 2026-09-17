@@ -14,6 +14,7 @@
 #include "ffx_vk_device_requirements.h"
 #include "ffx_vk_preset_query.h"
 #include "vulkan_device_features.hpp"
+#include "diagnostic-options.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -66,6 +67,7 @@ struct ProviderContext {
     bool first_dispatch = true;
     bool device_support_checked = false;
     bool sharpening_ignored_logged = false;
+    bool optional_masks_ignored_logged = false;
 };
 
 constexpr const char* presetName(std::uint32_t id) noexcept {
@@ -360,22 +362,24 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
         provider->assets=assets;
         const bool embedded=fsr4assets::is_embedded(assets);
         if (!embedded) {
-            provider->diagnostic_path=assets/"provider.log";
             if (!std::filesystem::is_directory(assets/"general"))
                 throw std::invalid_argument("general-resolution asset bundles are missing");
         }
-        if (const char* log=std::getenv("FSR4_VK_LOG_PATH"))
-            provider->diagnostic_path=log;
+        const char* log=std::getenv("FSR4_VK_LOG_PATH");
+        if (fsr4vk::provider_log_requested(std::getenv("FSR4_VK_LOG"), log)) {
+            if (log && *log) provider->diagnostic_path=log;
+            else if (!embedded) provider->diagnostic_path=assets/"provider.log";
 #if defined(_WIN32) && defined(FSR4_EMBEDDED_ASSETS)
-        else if (embedded) {
-            // Store-packaged game directories may be read-only. Keep crash
-            // breadcrumbs in the user's writable temp directory by default.
-            std::error_code ec;
-            auto temp=std::filesystem::temp_directory_path(ec);
-            if (!ec) provider->diagnostic_path=temp/("fsr4vk-provider-"+
-                std::to_string(GetCurrentProcessId())+".log");
-        }
+            else if (embedded) {
+                // Store-packaged game directories may be read-only. Keep crash
+                // breadcrumbs in the user's writable temp directory when opted in.
+                std::error_code ec;
+                auto temp=std::filesystem::temp_directory_path(ec);
+                if (!ec) provider->diagnostic_path=temp/("fsr4vk-provider-"+
+                    std::to_string(GetCurrentProcessId())+".log");
+            }
 #endif
+        }
         diagnostic(*provider,"context request flags="+std::to_string(create->flags)+
                    " max_render="+std::to_string(create->maxRenderSize.width)+"x"+
                    std::to_string(create->maxRenderSize.height)+" max_output="+
@@ -484,8 +488,17 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         provider->sharpening_ignored_logged = true;
     }
     if (d.flags) return reject("dispatch flags are unsupported");
-    if (d.reactive.resource || d.transparencyAndComposition.resource)
-        return reject("optional masks are unsupported");
+    // FSR2/3-compatible hosts may supply a reactive/composition mask (including
+    // a converted DLSS bias mask). The current FSR4 model path has no external
+    // mask inputs. Accept their presence without reading, binding or changing
+    // the caller's resources; optional inputs must not prevent upscaling.
+    if ((d.reactive.resource || d.transparencyAndComposition.resource) &&
+        !provider->optional_masks_ignored_logged) {
+        provider_message(*provider, FFX_API_MESSAGE_TYPE_WARNING,
+                         "FSR4 Vulkan ignores optional reactive/transparency masks; "
+                         "the current model path does not consume them");
+        provider->optional_masks_ignored_logged = true;
+    }
     const auto resource = [](const char* name, const FfxApiResource& r, uint32_t width, uint32_t height,
                              uint32_t format, VkFormat vkformat, uint32_t state,
                              uint32_t depth_usage = 0) {

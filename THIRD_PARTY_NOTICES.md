@@ -12,8 +12,12 @@ project is independent and does not claim AMD sponsorship or endorsement.
 
 ## OptiScaler
 
-The `optiscaler` Git submodule pins the modified source used to build the
-distributed `OptiScaler.dll`. OptiScaler is licensed under GNU GPL version 3;
+The `optiscaler` Git submodule pins the modified source used by older releases.
+The v0.3.2.4 archive instead includes a prebuilt DLL supplied by the PR #1161
+author, with redistribution permission reported by the project maintainer.
+Its matching source is not available yet; the submodule is not its corresponding
+source. The supplied binary's identity is recorded in `SOURCE_PROVENANCE.md`.
+OptiScaler is licensed under GNU GPL version 3;
 the complete license is reproduced in `LICENSES/OptiScaler-GPL-3.0.txt`.
 
 The submodule has its own third-party dependencies and notices. Clone it with

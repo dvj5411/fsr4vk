@@ -60,9 +60,13 @@ the supplied third-party Windows logs are not included in this public repository
 
 ## Diagnostics and preset evidence
 
-Embedded Windows builds now default to `%TEMP%/fsr4vk-provider-<pid>.log`, avoiding
+With `FSR4_VK_LOG=1`, embedded Windows builds log to `%TEMP%/fsr4vk-provider-<pid>.log`, avoiding
 writes inside protected WindowsApps directories. FSR4_VK_LOG_PATH still overrides
-this. Context requests, model creation boundaries, and rejection reasons are
+this and also enables logging on its own when nonempty. Without either opt-in,
+no provider log is created. In Steam/Proton, prepend `FSR4_VK_LOG=1` to the
+existing launch options (for example `FSR4_VK_LOG=1 %command%`). Keep existing
+DLL overrides and other options. Remove the variable to disable file logging.
+Context requests, model creation boundaries, and rejection reasons are
 recorded. Context errors also reach the FFX message callback when supplied.
 
 `FSR4VK_ERROR_MISSING_DEVICE_FEATURES` identifies unavailable required device

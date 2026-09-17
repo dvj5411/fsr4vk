@@ -2,7 +2,7 @@
 
 The provider source and build inputs were assembled from the private research
 repository `dvj5411/fsr4-vulkan-translation` at commit
-`764462671541c0f47d8080030ef752919069bf80`.
+`9d324330c0eb835763de0fc6f6361bc92ddffa8c` (provider fix and opt-in logging).
 
 This integrates the Deck fix (`f956eb0`) and the public NVIDIA development
 branch at `da7efe5` (implementation `763a35e`). Portable shader capture identities
@@ -28,17 +28,22 @@ The OptiScaler submodule is pinned to modified-source commit
 `f52646c3e440d3c7dc1a05ce0a77f30ab68f6dfa`. Its GPLv3 license is preserved at
 `LICENSES/OptiScaler-GPL-3.0.txt`.
 
-The v0.3.2.3 archive contains the updated embedded provider validated on W6400
-through UMU/GE-Proton11-5 and the unchanged personal OptiScaler DLL from v0.3.2.2,
-built by successful GitHub Actions
-run `34933619764`, artifact `10383255334`, at the pinned source revision above.
-The public source build also passes; PE build timestamps need not be identical.
-No fresh game, Deck, NVIDIA or native-Windows validation is claimed for this release.
-The separate PR #1161 device-feature patch is supplied for manual upstream
-submission; the archive does not contain a new OptiScaler build of that PR.
-See `provider/WINDOWS-FIELD-FIXES.md` for the diagnosis and validation limits.
+The v0.3.2.4 archive contains the exact embedded provider tested on W6400 through
+GE-Proton11-6, with optional-mask acceptance and opt-in file logging. The runtime
+shader/model resources are unchanged. Ten synthetic GPU cases and six logging
+integration cases passed; the user subsequently confirmed RDR2 launches. No new
+Deck, NVIDIA or native-Windows validation is claimed.
+
+The bundled OptiScaler DLL was supplied prebuilt by the PR #1161 author. The
+project maintainer reports permission to redistribute it. It is byte-identical
+to the author's ASI build used in the RDR2 test. Exact corresponding source and
+commit identification have not been supplied yet. The older pinned submodule
+above is retained for historical integration work and **does not reproduce this
+binary**. No source correspondence or reproducible-build claim is made for it.
+The parked local RDR2 BDA workaround is not included in this binary.
+See `provider/RDR2-COMPATIBILITY.md` for validation boundaries.
 
 - `amd_fidelityfx_upscaler_vk.dll`:
-  `2554284e6544b819160b4998a6aa9d871aa283d7ae6ac976200d0b8236fa0e76`
+  `9d8e5489370ffd5f593136b89957c0761a22be7697dd8075f67ffac98d2d6120`
 - `OptiScaler.dll`:
-  `0547cf39a65d9eff108ff3efb519d53cf07d186387cefb7de68fe01c62dd9fb6`
+  `96b9fcf18bbeea3a14d970cafceb00efb91670b374fd1a05b86c74d20299af2a`

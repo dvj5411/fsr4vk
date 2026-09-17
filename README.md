@@ -92,6 +92,14 @@ limits](provider/WINDOWS-FIELD-FIXES.md) and the separate
 The bundled custom OptiScaler DLL is unchanged from 0.3.2.2; it is not a new build
 of upstream PR #1161.
 
+Release 0.3.2.4 adds initial RDR2 support: supplied optional reactive/composition
+masks no longer abort dispatch. They are accepted but not consumed by the current
+model path. Provider file logging is now opt-in with `FSR4_VK_LOG=1` or a nonempty
+`FSR4_VK_LOG_PATH`; host error callbacks remain active. The release bundles the
+PR #1161 author's supplied OptiScaler binary, not a build of our older submodule.
+Its exact corresponding source has not been supplied yet. See
+[RDR2 validation and limitations](provider/RDR2-COMPATIBILITY.md).
+
 ## Build OptiScaler
 
 Open `optiscaler/OptiScaler.sln` in Visual Studio 2022 and build the `Release`
@@ -107,11 +115,13 @@ Start with an existing working OptiScaler 10.0 nightly installation. The custom
 OptiScaler build included in releases is optional, but recommended.
 
 1. Close the game and back up its existing DLLs.
-2. Recommended: replace its `OptiScaler.dll` with the matching custom build.
+2. Recommended: use the bundled `OptiScaler.dll`. In an existing ASI installation,
+   install it as `OptiScaler.asi` and retain the working loader and overrides;
+   do not install both forms simultaneously.
 3. Put `amd_fidelityfx_upscaler_vk.dll` in the game's `OptiScaler/` directory.
 4. Remove `FSR4_VK_ENABLE_DEVICE_FEATURES=1` from the launch arguments if it was
    added for an older build. It is redundant and is not read by the current
-   provider-owned device negotiation path.
+   provider. The host must enable the required features before device creation.
 5. Select the FSR 3.X/FFX backend and then the FSR 4.0.2c Vulkan provider.
 
 A theoretical direct provider drop-in can instead use the
@@ -134,6 +144,8 @@ OptiScaler is GPLv3; see
 pinned source in the `optiscaler` submodule. See
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
 [`SOURCE_PROVENANCE.md`](SOURCE_PROVENANCE.md) for exact revisions.
+The v0.3.2.4 prebuilt OptiScaler DLL is an exception: its source revision is
+unavailable, and the submodule must not be treated as its matching source.
 
 Public distribution remains experimental. Review the recorded provenance and
 license boundaries before reusing or redistributing the model/shader material.

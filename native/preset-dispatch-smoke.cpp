@@ -410,6 +410,13 @@ int main(int argc, char** argv) {
     const bool nms_inputs = temporal_test || game_formats || (argc == 6 && std::string(argv[5]) == "--provider-nms");
     const bool use_provider = nms_inputs || (argc == 6 && std::string(argv[5]) == "--provider");
     const bool use_context = use_provider || (argc == 6 && std::string(argv[5]) == "--context");
+    const std::string optional_masks = std::getenv("FSR4_TEST_OPTIONAL_MASKS") ?
+        std::getenv("FSR4_TEST_OPTIONAL_MASKS") : "none";
+    if (optional_masks != "none" && optional_masks != "reactive" &&
+        optional_masks != "transparency" && optional_masks != "both") {
+        std::cerr << "invalid FSR4_TEST_OPTIONAL_MASKS\n";
+        return 2;
+    }
     if (argc == 6 && !use_context) return 2;
     const auto read_size=[](const char* name,uint32_t& w,uint32_t& h) {
         if(const char* value=std::getenv(name)) {
@@ -809,7 +816,7 @@ int main(int argc, char** argv) {
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
         Buffer& readback = buffers.back();
 
-        images.reserve(8);
+        images.reserve(9);
         images.push_back(create_image(physical_device, device, kRenderWidth, kRenderHeight,
                                       doom_formats ? VK_FORMAT_E5B9G9R9_UFLOAT_PACK32 :
                                           (nms_formats ? VK_FORMAT_B10G11R11_UFLOAT_PACK32 : VK_FORMAT_R16G16B16A16_SFLOAT),
@@ -848,6 +855,12 @@ int main(int argc, char** argv) {
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
         Image& output = images.back();
+        Image* optional_mask = nullptr;
+        if (optional_masks != "none") {
+            images.push_back(create_image(physical_device, device, kRenderWidth, kRenderHeight,
+                VK_FORMAT_R8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT));
+            optional_mask = &images.back();
+        }
 
         OptimizedConstants main_constants{};
         main_constants.inv_size[0] = 1.0f / kOutputWidth;
@@ -1009,6 +1022,17 @@ int main(int argc, char** argv) {
         copy_to_image(depth, color_size);
         copy_to_image(motion, color_size + depth_size);
         copy_to_image(exposure_image, exposure_offset);
+        if (optional_mask) {
+            // All images were transitioned to TRANSFER_DST above. Use a real,
+            // nonzero mask so this covers acceptance rather than null handles.
+            VkClearColorValue mask_value{{0.75f, 0.75f, 0.75f, 0.75f}};
+            vkCmdClearColorImage(command_buffer, optional_mask->image,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &mask_value, 1, &range);
+            image_barrier(command_buffer, optional_mask->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_CLEAR_BIT,
+                VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+        }
         vkCmdFillBuffer(command_buffer, scratch.buffer, 0, VK_WHOLE_SIZE, 0);
 
         for (const Image* image : {&color, &depth, &motion, &exposure_image,
@@ -1110,6 +1134,12 @@ int main(int argc, char** argv) {
             d.motionVectors=resource(motion,FFX_API_SURFACE_FORMAT_R16G16_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
             d.exposure=resource(exposure_image,FFX_API_SURFACE_FORMAT_R32_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
             if (nms_inputs && !external_exposure_test) d.exposure={};
+            if (optional_mask) {
+                const auto mask = resource(*optional_mask, FFX_API_SURFACE_FORMAT_R8_UNORM,
+                                           FFX_API_RESOURCE_STATE_COMPUTE_READ);
+                if (optional_masks == "reactive" || optional_masks == "both") d.reactive = mask;
+                if (optional_masks == "transparency" || optional_masks == "both") d.transparencyAndComposition = mask;
+            }
             d.output=resource(output,FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
             if (game_formats) {
                 d.color.description.format=doom_formats ? FFX_API_SURFACE_FORMAT_R9G9B9E5_SHAREDEXP :
@@ -1153,6 +1183,8 @@ int main(int argc, char** argv) {
             }
             if (ffxDispatch(&api_context,&d.header)!=FFX_API_RETURN_OK)
                 throw std::runtime_error("provider dispatch failed");
+            if (optional_mask)
+                std::cout << "optional_masks=" << optional_masks << " dispatch=accepted\n";
             if (requested) {
                 Fsr4VkQueryActivePreset query{{FSR4VK_QUERY_DESC_TYPE_ACTIVE_PRESET, nullptr}, FSR4VK_PRESET_UNKNOWN};
                 if (ffxQuery(&api_context, &query.header) != FFX_API_RETURN_OK || query.activePreset != expected_preset)
