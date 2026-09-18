@@ -24,6 +24,8 @@
 #include <new>
 #include <memory>
 #include <map>
+#include <atomic>
+#include <chrono>
 #include "../native/quality-context.hpp"
 
 namespace {
@@ -49,6 +51,8 @@ constexpr std::uint64_t kFsr314CompatibilityVersionId =
 constexpr const char* kVersionName = "4.0.2c Vulkan INT8";
 
 struct ProviderContext {
+    inline static std::atomic<std::uint64_t> next_id{0};
+    const std::uint64_t diagnostic_id=++next_id;
     VkDevice device = VK_NULL_HANDLE;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     PFN_vkGetDeviceProcAddr getDeviceProcAddr = nullptr;
@@ -68,6 +72,7 @@ struct ProviderContext {
     bool device_support_checked = false;
     bool sharpening_ignored_logged = false;
     bool optional_masks_ignored_logged = false;
+    bool pending_color_reset = false;
 };
 
 constexpr const char* presetName(std::uint32_t id) noexcept {
@@ -92,7 +97,9 @@ void diagnostic(const ProviderContext& context, const std::string& text) noexcep
     try {
         if (!context.diagnostic_path.empty()) {
             std::ofstream log(context.diagnostic_path,std::ios::app);
-            log << text << '\n';
+            const auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+            log << "[time_ms=" << ms << " context=" << context.diagnostic_id << "] " << text << '\n';
         }
     } catch (...) { }
 }
@@ -335,7 +342,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
     const auto version = findVersion(header);
     // Well-behaved callers query this DLL and request kVersionId. Some games
     // loading amd_fidelityfx_vk.dll pin the stock FSR 3.1.4 provider ID
-    // instead; accept that ABI-compatible selection as a drop-in alias.
+    // instead; accept that ABI-compatible selection as a compatibility alias.
     if (version != 0 && version != kVersionId &&
         version != kFsr314CompatibilityVersionId) {
         return FFX_API_RETURN_NO_PROVIDER;
@@ -368,16 +375,27 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
         const char* log=std::getenv("FSR4_VK_LOG_PATH");
         if (fsr4vk::provider_log_requested(std::getenv("FSR4_VK_LOG"), log)) {
             if (log && *log) provider->diagnostic_path=log;
-            else if (!embedded) provider->diagnostic_path=assets/"provider.log";
-#if defined(_WIN32) && defined(FSR4_EMBEDDED_ASSETS)
-            else if (embedded) {
-                // Store-packaged game directories may be read-only. Keep crash
-                // breadcrumbs in the user's writable temp directory when opted in.
-                std::error_code ec;
-                auto temp=std::filesystem::temp_directory_path(ec);
-                if (!ec) provider->diagnostic_path=temp/("fsr4vk-provider-"+
-                    std::to_string(GetCurrentProcessId())+".log");
+#if defined(_WIN32)
+            else {
+                // nullptr selects the host EXE even when this DLL lives under
+                // OptiScaler/. Failure to open a log must not fail the upscaler.
+                try {
+                    wchar_t executable[32768]{};
+                    const auto length=GetModuleFileNameW(nullptr,executable,32768);
+                    const auto host=(length && length<32768)
+                        ? std::filesystem::path(executable) : std::filesystem::path{};
+                    std::error_code ec;
+                    auto temp=std::filesystem::temp_directory_path(ec);
+                    if(ec) temp.clear();
+                    provider->diagnostic_path=fsr4vk::default_provider_log_path(
+                        host,temp,GetCurrentProcessId(),[](const std::filesystem::path& path) {
+                            std::ofstream stream(path,std::ios::app);
+                            return stream.good();
+                        });
+                } catch (...) { }
             }
+#else
+            else provider->diagnostic_path=assets/"provider.log";
 #endif
         }
         diagnostic(*provider,"context request flags="+std::to_string(create->flags)+
@@ -387,11 +405,12 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
                    std::to_string(create->maxUpscaleSize.height));
         const uint32_t required_flags = FFX_UPSCALE_ENABLE_DEPTH_INVERTED;
         const uint32_t permutation = create->flags & ~(FFX_UPSCALE_ENABLE_DEBUG_CHECKING | FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE |
-                                                        FFX_UPSCALE_ENABLE_DYNAMIC_RESOLUTION | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE);
+                                                        FFX_UPSCALE_ENABLE_DYNAMIC_RESOLUTION | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE |
+                                                        FFX_UPSCALE_ENABLE_NON_LINEAR_COLORSPACE);
         fsr4::validate_dimensions(create->maxRenderSize.width,create->maxRenderSize.height,
                                  create->maxUpscaleSize.width,create->maxUpscaleSize.height);
         if(permutation!=required_flags)
-            throw std::invalid_argument("provider requires inverted depth, low-resolution non-jittered motion vectors and linear color");
+            throw std::invalid_argument("provider requires inverted depth and low-resolution non-jittered motion vectors");
         fsr4vk::validate_descriptor_commands(backend->device,backend->getDeviceProcAddr);
         (void)fsr4vk::DeviceDispatch(backend->device,backend->getDeviceProcAddr,provider->apiVersion);
         diagnostic(*provider,"context created flags="+std::to_string(create->flags)+
@@ -412,6 +431,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDestroyContext(
     const ffxAllocationCallbacks* callbacks) {
     if (!context || !*context || !validAllocator(callbacks)) return FFX_API_RETURN_ERROR_PARAMETER;
     auto* provider = reinterpret_cast<ProviderContext*>(*context);
+    diagnostic(*provider,"context destroyed cached_models="+std::to_string(provider->cores.size()));
     provider->~ProviderContext();
     deallocate(callbacks, provider);
     *context = nullptr;
@@ -487,7 +507,12 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                          "FSR4 Vulkan internal sharpening is unavailable; use host RCAS if desired");
         provider->sharpening_ignored_logged = true;
     }
-    if (d.flags) return reject("dispatch flags are unsupported");
+    if (d.flags & ~(FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_SRGB | FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_PQ))
+        return reject("dispatch flags other than sRGB/PQ color selection are unsupported");
+    const auto color_space=fsr4core::select_color_space(
+        (provider->flags & FFX_UPSCALE_ENABLE_NON_LINEAR_COLORSPACE)!=0,
+        (d.flags & FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_SRGB)!=0,
+        (d.flags & FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_PQ)!=0);
     // FSR2/3-compatible hosts may supply a reactive/composition mask (including
     // a converted DLSS bias mask). The current FSR4 model path has no external
     // mask inputs. Accept their presence without reading, binding or changing
@@ -542,6 +567,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
             }
             diagnostic(*provider,"creating model="+selected_preset+
                        " exposure="+((provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE) ? "auto" : "external"));
+            const auto build_started=std::chrono::steady_clock::now();
             const auto bucket=provider->maxUpscaleSize.width>1920 || provider->maxUpscaleSize.height>1080 ? "2160" : "1080";
             const auto bundle=provider->assets/"general"/bucket/selected_preset;
             auto created=std::make_unique<fsr4core::QualityContext>(provider->physicalDevice,provider->device,
@@ -553,9 +579,16 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                 (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0);
             core=created.get();
             provider->cores[selected_preset]=std::move(created);
-            diagnostic(*provider,"model ready="+selected_preset);
+            diagnostic(*provider,"model ready="+selected_preset+" cpu_build_ms="+
+                std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now()-build_started).count()));
         }
-        const bool force_reset=provider->active_preset!=selected_preset ||
+        const bool color_changed=core->set_color_space(color_space);
+        provider->pending_color_reset |= color_changed;
+        if(color_changed || provider->first_dispatch)
+            diagnostic(*provider,std::string("color_space=")+fsr4core::color_space_name(color_space)+
+                       " history_reset=1");
+        const bool force_reset=provider->pending_color_reset || provider->active_preset!=selected_preset ||
                                provider->last_output_width!=ow ||
                                provider->last_output_height!=oh;
         const bool packed_color=d.color.description.format==FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT;
@@ -599,6 +632,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
             provider_message(*provider,FFX_API_MESSAGE_TYPE_WARNING,
                              "FSR4 Vulkan replaced invalid pre-exposure with 1.0");
         core->record(static_cast<VkCommandBuffer>(d.commandList),color,depth,motion,exposure,output,c);
+        provider->pending_color_reset=false;
         provider->active_preset=selected_preset;
         provider->active_core=core;
         provider->last_output_width=ow;provider->last_output_height=oh;

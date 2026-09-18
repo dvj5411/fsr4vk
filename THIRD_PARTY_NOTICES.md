@@ -3,7 +3,7 @@
 ## AMD FidelityFX SDK
 
 The FFX API headers under `amd-fidelityfx-sdk/` and the model/shader payloads
-under `assets/general/` originate from the AMD FidelityFX SDK 2.0.0 snapshot
+under `assets/general/`, `assets/portable/`, and `assets/colors/` originate from the AMD FidelityFX SDK 2.0.0 snapshot
 identified in `SOURCE_PROVENANCE.md`. They retain AMD's copyright notice and
 MIT license, reproduced in `LICENSES/AMD-FidelityFX-SDK-MIT.md`.
 
@@ -12,7 +12,8 @@ project is independent and does not claim AMD sponsorship or endorsement.
 
 ## OptiScaler
 
-The `optiscaler` Git submodule pins the modified source used by older releases.
+The `optiscaler` Git submodule pins the modified source for the custom
+`OptiScaler_fallback.dll` restored in v0.3.2.5 and used by older releases.
 The v0.3.2.4 archive instead includes a prebuilt DLL supplied by the PR #1161
 author, with redistribution permission reported by the project maintainer.
 Its matching source is not available yet; the submodule is not its corresponding

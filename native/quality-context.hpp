@@ -3,6 +3,8 @@
 #include "embedded-assets.hpp"
 #include "vulkan-compat.hpp"
 #include "external-exposure-spv.hpp"
+#include "color-space.hpp"
+#include "model11-row-bounds.hpp"
 #include "../provider/vulkan_device_features.hpp"
 #include <algorithm>
 #include <cstring>
@@ -227,6 +229,10 @@ class QualityContext {
     std::array<VkDescriptorSetLayout,4> set_layouts{};
     std::vector<VkShaderModule> modules;
     std::vector<VkPipeline> pipelines;
+    std::vector<VkPipeline> owned_pipelines;
+    std::array<std::array<VkPipeline,2>,4> color_pipelines{};
+    fs::path color_shader_dir;
+    ColorSpace active_color = ColorSpace::Linear;
     std::vector<Buffer> buffers;
     std::vector<Image> images;
     std::vector<uint8_t> weights;
@@ -272,13 +278,49 @@ class QualityContext {
             for (auto& b : f.descriptors) destroy_buffer(device,b);
             destroy_buffer(device,f.constants);
         }
-        for (auto p : pipelines) vkDestroyPipeline(device,p,nullptr);
+        for (auto p : owned_pipelines) vkDestroyPipeline(device,p,nullptr);
         for (auto m : modules) vkDestroyShaderModule(device,m,nullptr);
         if (pipeline_layout) vkDestroyPipelineLayout(device,pipeline_layout,nullptr);
         for (auto l : set_layouts) if (l) vkDestroyDescriptorSetLayout(device,l,nullptr);
         if (sampler) vkDestroySampler(device,sampler,nullptr);
         for (auto& i : images) destroy_image(device,i);
         for (auto& b : buffers) destroy_buffer(device,b);
+    }
+public:
+    // Only the pre/post shaders depend on color space. Keep old pipelines alive
+    // for in-flight command buffers; do not allocate another model/scratch set.
+    bool set_color_space(ColorSpace color) {
+        const auto name=color_space_name(color); // Validate before indexing.
+        if (color==active_color) return false;
+        if (!nms_inputs) throw std::invalid_argument("color variants require general model layout");
+        auto& pair=color_pipelines[static_cast<unsigned>(color)];
+        for (unsigned i=0;i<2;++i) {
+            if(pair[i]) continue;
+            const auto file=std::string(i==0 ? "pass-01" : "pass-14")+
+                (native_mixed_dot ? ".spv" : ".portable.spv");
+            pair[i]=create_pipeline(read_spirv(color_shader_dir/name/file),name);
+        }
+        pipelines[0]=pair[0]; pipelines[13]=pair[1];
+        active_color=color;
+        return true; // Caller must reset temporal history on the transition.
+    }
+private:
+    VkPipeline create_pipeline(const std::vector<std::uint32_t>& code,const char* name) {
+        VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        module_info.codeSize=code.size()*sizeof(std::uint32_t);
+        module_info.pCode=code.data();
+        VkShaderModule module{};
+        check(vkCreateShaderModule(device,&module_info,nullptr,&module),name);
+        modules.push_back(module);
+        VkPipelineShaderStageCreateInfo stage{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        stage.stage=VK_SHADER_STAGE_COMPUTE_BIT; stage.module=module; stage.pName="main";
+        VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        info.flags=VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+        info.stage=stage; info.layout=pipeline_layout;
+        VkPipeline pipeline{};
+        check(vkCreateComputePipelines(device,VK_NULL_HANDLE,1,&info,nullptr,&pipeline),name);
+        owned_pipelines.push_back(pipeline);
+        return pipeline;
     }
 public:
     const char* shader_backend() const {
@@ -301,6 +343,8 @@ public:
           dispatch(logical, get_device_proc_addr, api_version), nms_inputs(nms),
           external_exposure(external_exposure_input) {
       try {
+        color_shader_dir=shader_dir.parent_path().parent_path().parent_path()/"colors"/
+                         shader_dir.parent_path().filename()/shader_dir.filename();
         fsr4vk::validate_descriptor_commands(device,get_device_proc_addr);
         if(external_exposure && !nms_inputs)
             throw std::invalid_argument("external exposure adapter requires general model layout");
@@ -444,31 +488,13 @@ public:
                                            : std::string(pass.hash)+".spv";
             if (!native_mixed_dot)
                 name.insert(name.size() - 4, ".portable");
-            const auto code = external_exposure && index==14
+            auto code = external_exposure && index==14
                 ? std::vector<std::uint32_t>(std::begin(kExternalExposureSpv),std::end(kExternalExposureSpv))
                 : read_spirv(shader_dir / name);
-            VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-            module_info.codeSize = code.size() * sizeof(std::uint32_t);
-            module_info.pCode = code.data();
-            VkShaderModule module = VK_NULL_HANDLE;
-            check(vkCreateShaderModule(device, &module_info, nullptr, &module), pass.name);
-            modules.push_back(module);
-            VkPipelineShaderStageCreateInfo stage{
-                VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
-            stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-            stage.module = module;
-            stage.pName = "main";
-            VkComputePipelineCreateInfo pipeline_info{
-                VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
-            pipeline_info.flags = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-            pipeline_info.stage = stage;
-            pipeline_info.layout = pipeline_layout;
-            VkPipeline pipeline = VK_NULL_HANDLE;
-            check(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline_info,
-                                           nullptr, &pipeline),
-                  pass.name);
-            pipelines.push_back(pipeline);
+            if(index==11) fsr4::guard_model11_rows(code);
+            pipelines.push_back(create_pipeline(code,pass.name));
         }
+        color_pipelines[0]={pipelines[0],pipelines[13]};
 
 
         auto get_layout_size = reinterpret_cast<PFN_vkGetDescriptorSetLayoutSizeEXT>(

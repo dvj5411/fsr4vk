@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "tier": "1080",
+  "preset": "performance",
+  "color_space": "srgb",
+  "shaders": [
+    {
+      "file": "pass-01.spv",
+      "sha256": "f0258165d5314b9c7db94d824e62bce639cda1ba8076b844c1555c84aa71a932",
+      "portable_sha256": "e0f1f3d58954ca346b45ce610e3549e6cd198981608249dfdb37f2b3689dcd38",
+      "linear_sha256": "533dfe1af5841aac85141657066859519b96736ca455275f02f1801ff3ae5b63",
+      "dxil": "5de2f22f255f2cf4"
+    },
+    {
+      "file": "pass-14.spv",
+      "sha256": "12d59285894af94d8eb192c4bc6f6842e644c3e46571a255cf88e717ef882325",
+      "portable_sha256": "96ca296e2cac638ff67d82cae3fe4a265cc65feee5fc01e78633a8fd8d5cbcb2",
+      "linear_sha256": "a3f84fc43eac65ce459692e0b5e017ad3ea2615703a0ad016e474f87fdb9eaec",
+      "dxil": "c29a06a264ef6835"
+    }
+  ],
+  "provenance": {
+    "native": {
+      "dll_sha256": "c7720bc16bede334f59a1a32cd22edbcbbb159685ed5240e61350a5fb0bc8a94",
+      "probe_sha256": "2f51b7cad09e4afb8dd2e2d5a9c8aa3745fe64c4592043c0c12829de58c46f01",
+      "vkd3d_sha256": "c1d9bb64410eee0b5e824e09a310239e2131660b8a6a77d0c263166e937b2467",
+      "VKD3D_CONFIG": "force_raw_va_cbv",
+      "VKD3D_DISABLE_EXTENSIONS": "",
+      "gpu": "W6400",
+      "driver": "Mesa-26.2.2",
+      "color_space": "srgb"
+    },
+    "portable": {
+      "dll_sha256": "c7720bc16bede334f59a1a32cd22edbcbbb159685ed5240e61350a5fb0bc8a94",
+      "probe_sha256": "2f51b7cad09e4afb8dd2e2d5a9c8aa3745fe64c4592043c0c12829de58c46f01",
+      "vkd3d_sha256": "c1d9bb64410eee0b5e824e09a310239e2131660b8a6a77d0c263166e937b2467",
+      "VKD3D_CONFIG": "force_raw_va_cbv",
+      "VKD3D_DISABLE_EXTENSIONS": "VK_VALVE_shader_mixed_float_dot_product,VK_KHR_shader_float_controls2,VK_NV_raw_access_chains",
+      "gpu": "W6400",
+      "driver": "Mesa-26.2.2",
+      "color_space": "srgb"
+    }
+  }
+}

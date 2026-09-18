@@ -44,24 +44,13 @@ The release keeps the prior personal OptiScaler binary, whose provider-owned
 negotiation is separate from this upstream proposal. It is not presented as a
 new build of PR #1161. Native Windows Microsoft Store retesting remains necessary.
 
-## Validation summary
-
-Synthetic W6400/RADV tests pass for both logged dimensions: NMS automatic
-exposure and Endfield external exposure values 0, 0.5, 1 and 2. Native and
-self-contained Windows/Proton outputs match byte-for-byte; the portable INT8
-backend also passes. All six model presets pass external-exposure checks at
-1080p and 2160p capacity tiers with Vulkan validation enabled. The final release
-DLL passes the five Windows/Proton cases again, plus an injected missing-command
-test that produces the named error through the FFX callback. CPU tests cover
-context acceptance, unsupported permutations and feature-chain preservation.
-These are functional checks, not native Windows game runs or fresh DX12-oracle
-RMSE measurements. Raw synthetic test logs remain in the private research repo;
-the supplied third-party Windows logs are not included in this public repository.
-
 ## Diagnostics and preset evidence
 
-With `FSR4_VK_LOG=1`, embedded Windows builds log to `%TEMP%/fsr4vk-provider-<pid>.log`, avoiding
-writes inside protected WindowsApps directories. FSR4_VK_LOG_PATH still overrides
+With `FSR4_VK_LOG=1`, Windows builds log to `fsr4vk-provider-<pid>.log` beside the
+game executable (not beside the provider DLL or relative to the working directory).
+If that directory is not writable, the log falls back to
+`%TEMP%/fsr4vk-provider-<pid>.log`, supporting protected WindowsApps installations.
+`FSR4_VK_LOG_PATH` still overrides
 this and also enables logging on its own when nonempty. Without either opt-in,
 no provider log is created. In Steam/Proton, prepend `FSR4_VK_LOG=1` to the
 existing launch options (for example `FSR4_VK_LOG=1 %command%`). Keep existing
@@ -78,7 +67,7 @@ GPU/driver support. Neither a non-null command pointer nor successful physical
 feature queries prove that all logical-device feature bits were enabled.
 Vulkan has no general post-creation enabled-feature query, so missing shader-only
 bits such as computeDerivativeGroupLinear cannot be reliably detected by a
-drop-in provider without host cooperation. The PR patch fixes those at creation;
+provider without host cooperation. The PR patch fixes those at creation;
 the provider logs this limitation rather than claiming a full enabled-bit audit.
 
 AMD's 4.0.2 source in ffx_provider_fsr4_dx12.cpp selects modelPreset using

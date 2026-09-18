@@ -29,9 +29,8 @@ The provider build currently uses a Unix-like host with:
 - a Windows Vulkan import library (`vulkan-1`) visible to the linker.
 
 Building the custom `OptiScaler.dll` requires Windows, Visual Studio 2022, and
-the OptiScaler submodule's recursive dependencies. The custom DLL is optional,
-but recommended for the best provider selection, preset reporting, and
-diagnostics.
+the OptiScaler submodule's recursive dependencies. Releases include this custom
+build as `OptiScaler_fallback.dll` for Doom TDA and preset selection.
 
 ## Clone
 
@@ -58,16 +57,15 @@ export FSR4_VULKAN_IMPORT_LIBRARY=/path/to/libvulkan-1.a
 ```
 
 The script verifies all twelve original and portable shader/model bundles, embeds them, and
-writes the self-contained provider under both supported discovery names:
+writes the self-contained provider:
 
 ```text
 build/provider-windows/amd_fidelityfx_upscaler_vk.dll
-build/provider-windows/amd_fidelityfx_vk.dll
 ```
 
 Set `FSR4_PROVIDER_OUTPUT_DIR` to change the output directory or
 `FSR4_EMBED_ASSETS` to build with another verified `assets/general` tree and
-its sibling `assets/portable` tree. The portable INT8 backend is selected
+its sibling `assets/portable` and `assets/colors` trees. The portable INT8 backend is selected
 automatically when the VALVE mixed-dot feature is unavailable. Initial NVIDIA
 validation covers the RTX 3070 Ti through Proton, not native Windows NVIDIA.
 
@@ -100,6 +98,11 @@ PR #1161 author's supplied OptiScaler binary, not a build of our older submodule
 Its exact corresponding source has not been supplied yet. See
 [RDR2 validation and limitations](provider/RDR2-COMPATIBILITY.md).
 
+Release 0.3.2.5 adds generic non-linear, PQ, and sRGB color modes, the model-11
+row-bounds correctness fix, and game-local opt-in diagnostics. It restores the
+custom OptiScaler as `OptiScaler_fallback.dll` and places the provider in
+`OptiScaler/` inside the ZIP. See [color-space support and validation](provider/COLOR-SPACES.md).
+
 ## Build OptiScaler
 
 Open `optiscaler/OptiScaler.sln` in Visual Studio 2022 and build the `Release`
@@ -111,22 +114,20 @@ optiscaler/x64/Release/a/OptiScaler.dll
 
 ## Install
 
-Start with an existing working OptiScaler 10.0 nightly installation. The custom
-OptiScaler build included in releases is optional, but recommended.
+Start with an existing working OptiScaler 10.0 nightly installation.
 
 1. Close the game and back up its existing DLLs.
-2. Recommended: use the bundled `OptiScaler.dll`. In an existing ASI installation,
-   install it as `OptiScaler.asi` and retain the working loader and overrides;
-   do not install both forms simultaneously.
-3. Put `amd_fidelityfx_upscaler_vk.dll` in the game's `OptiScaler/` directory.
+2. Extract all ZIP contents into the root of the game files containing that
+   OptiScaler installation. The provider is placed in `OptiScaler/` automatically.
+3. If you need the fallback, rename `OptiScaler_fallback.dll` to your existing
+   OptiScaler filename and replace it. For an ASI installation, use `OptiScaler.asi`
+   and retain the working loader and overrides. Do not load both forms simultaneously.
 4. Remove `FSR4_VK_ENABLE_DEVICE_FEATURES=1` from the launch arguments if it was
    added for an older build. It is redundant and is not read by the current
    provider. The host must enable the required features before device creation.
 5. Select the FSR 3.X/FFX backend and then the FSR 4.0.2c Vulkan provider.
 
-A theoretical direct provider drop-in can instead use the
-`amd_fidelityfx_vk.dll` filename expected by a game or existing loader. This
-path is new and should still be treated as experimental.
+There is currently a known regression in Doom TDA and preset selector when using the up-to-date OptiScaler. If you need these features, use the fallback .dll instead.
 
 The current experimental path requires Vulkan 1.1 or newer and the provider's
 required Vulkan device features. The validated hardware baseline is an RDNA2

@@ -19,16 +19,21 @@ class PackagingTests(unittest.TestCase):
             assets = Path(__file__).resolve().parents[1]/'assets'
             shutil.copytree(assets/'general', general)
             shutil.copytree(assets/'portable', root/'portable')
+            shutil.copytree(assets/'colors', root/'colors')
             command = [sys.executable,str(Path(__file__).with_name('embed-general-assets.py')),str(general),str(root/'generated')]
             subprocess.run(command,check=True,capture_output=True)
             report = json.loads((root/'generated/embedded-assets.json').read_text())
-            self.assertEqual(len(report['entries']),384)
-            self.assertEqual(len({e['path'] for e in report['entries']}),384)
+            self.assertEqual(len(report['entries']),528)
+            self.assertEqual(len({e['path'] for e in report['entries']}),528)
             self.assertEqual(len({e['resource_id'] for e in report['entries']}),
                              len({e['sha256'] for e in report['entries']}))
             before = (root/'generated/embedded-asset-index.hpp').read_bytes()
             subprocess.run(command,check=True,capture_output=True)
             self.assertEqual(before,(root/'generated/embedded-asset-index.hpp').read_bytes())
+            color=root/'colors/1080/quality/srgb/pass-01.spv'
+            saved=color.read_bytes();color.write_bytes(b'corrupt')
+            self.assertNotEqual(subprocess.run(command,capture_output=True).returncode,0)
+            color.write_bytes(saved)
             manifest=general/'2160/drs/manifest.json'
             manifest_bytes=manifest.read_bytes()
             manifest.unlink()

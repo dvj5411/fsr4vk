@@ -2,7 +2,10 @@
 
 The provider source and build inputs were assembled from the private research
 repository `dvj5411/fsr4-vulkan-translation` at commit
-`9d324330c0eb835763de0fc6f6361bc92ddffa8c` (provider fix and opt-in logging).
+`ae0162216b85610bf2b37a14f3ec3075adb2e28e` (selected functional changes for 0.3.2.5).
+Research capture hooks, throughput experiments, memory-placement experiments,
+and optimization tooling/evidence are excluded. Base shader/model payloads
+are unchanged; color overlays and the runtime row-bounds guard are included.
 
 This integrates the Deck fix (`f956eb0`) and the public NVIDIA development
 branch at `da7efe5` (implementation `763a35e`). Portable shader capture identities
@@ -34,7 +37,7 @@ shader/model resources are unchanged. Ten synthetic GPU cases and six logging
 integration cases passed; the user subsequently confirmed RDR2 launches. No new
 Deck, NVIDIA or native-Windows validation is claimed.
 
-The bundled OptiScaler DLL was supplied prebuilt by the PR #1161 author. The
+The v0.3.2.4 OptiScaler DLL was supplied prebuilt by the PR #1161 author. The
 project maintainer reports permission to redistribute it. It is byte-identical
 to the author's ASI build used in the RDR2 test. Exact corresponding source and
 commit identification have not been supplied yet. The older pinned submodule
@@ -47,3 +50,20 @@ See `provider/RDR2-COMPATIBILITY.md` for validation boundaries.
   `9d8e5489370ffd5f593136b89957c0761a22be7697dd8075f67ffac98d2d6120`
 - `OptiScaler.dll`:
   `96b9fcf18bbeea3a14d970cafceb00efb91670b374fd1a05b86c74d20299af2a`
+
+## Release 0.3.2.5
+
+`OptiScaler_fallback.dll` restores the custom binary from 0.3.2.2/0.3.2.3,
+SHA-256 `0547cf39a65d9eff108ff3efb519d53cf07d186387cefb7de68fe01c62dd9fb6`.
+Its matching source is the pinned OptiScaler submodule commit
+`f52646c3e440d3c7dc1a05ce0a77f30ab68f6dfa`.
+The PR #1161 author's binary from 0.3.2.4 is not bundled in 0.3.2.5.
+
+The provider is packaged at `OptiScaler/amd_fidelityfx_upscaler_vk.dll`.
+Color-overlay manifests record hashes and their relationship to the unchanged
+linear shaders. The normal capability-selected build is used; the test-only
+forced-portable option is disabled. See `provider/COLOR-SPACES.md` for retained
+GPU evidence, numerical exceptions, and hardware-validation limits.
+
+0.3.2.5 provider SHA-256:
+`39733a9f6b4d3e99485eb8de570e779e02112d794afdbe9f5a7d870ca27e0da2`.

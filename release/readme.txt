@@ -1,4 +1,4 @@
-EXPERIMENTAL FSR4.0.2 VK IMPLEMENTATION — RELEASE 0.3.2.3
+EXPERIMENTAL FSR4.0.2 VK IMPLEMENTATION — RELEASE 0.3.2.5
 THINGS WILL BREAK! IF YOU FIND A PROBLEM, @de_w23 ON THE OPTISCALER DISCORD!
 
 Requirements:
@@ -9,13 +9,14 @@ Other NVIDIA GPUs, Intel GPUs, and native Windows NVIDIA operation are not yet v
 
 Instructions on usage:
 1. Extract a pre-existing OptiScaler 10.0 nightly build into your game as normal.
-2. Optional but recommended: overwrite the existing OptiScaler.dll with the custom build included here.
-3. Put amd_fidelityfx_upscaler_vk.dll in the /<game folder location>/OptiScaler/ folder.
+2. Extract this archive into the root of the game files containing your existing OptiScaler installation. The archive places the provider in OptiScaler/ automatically.
+3. To use the custom fallback, rename OptiScaler_fallback.dll to the filename used by your existing OptiScaler installation (for example OptiScaler.dll or OptiScaler.asi) and replace that file after backing it up. Do not load both forms simultaneously.
 4. FSR4_VK_ENABLE_DEVICE_FEATURES=1 is redundant with this build and may be removed from the launch args.
 5. Select the FSR 3.X/FFX backend and then the FSR 4.0.2c Vulkan provider.
 6. With the included OptiScaler build, leave the preset at Auto or force presets 0–5. Preset 4 uses the DRS model. Preset selection does not change the game's render resolution.
 
-Experimental direct drop-in:
-The self-contained upscaler DLL may theoretically be renamed to amd_fidelityfx_vk.dll and used without the custom OptiScaler build. Back up the original DLL first.
+Diagnostics: logging is opt-in with FSR4_VK_LOG=1 or a nonempty FSR4_VK_LOG_PATH. Logs default to fsr4vk-provider-<pid>.log beside the game executable, with a %TEMP% fallback if that directory is not writable.
 
-Diagnostics: embedded Windows builds write fsr4vk-provider-<pid>.log in %TEMP% by default. FSR4_VK_LOG_PATH can override this location.
+extract all to root of game files
+
+There is currently a known regression in Doom TDA and preset selector when using the up-to-date OptiScaler. If you need these features, use the fallback .dll instead.

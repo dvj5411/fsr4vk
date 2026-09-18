@@ -399,6 +399,10 @@ int main(int argc, char** argv) {
     const bool doom_formats = argc == 6 && std::string(argv[5]) == "--provider-doom-formats";
     const bool game_formats = nms_formats || doom_formats;
     const bool dynamic_resolution = std::getenv("FSR4_TEST_DYNAMIC_RESOLUTION") != nullptr;
+    const std::string color_mode=std::getenv("FSR4_TEST_COLOR_SPACE") ? std::getenv("FSR4_TEST_COLOR_SPACE") : "linear";
+    if(color_mode!="linear" && color_mode!="nonlinear" && color_mode!="srgb" && color_mode!="pq") return 2;
+    const bool color_switch_test=std::getenv("FSR4_TEST_COLOR_SWITCH")!=nullptr;
+    unsigned color_dispatch_index=0;
     const bool temporal_test = argc == 6 && std::string(argv[5]) == "--provider-temporal";
     const bool nms_inputs = temporal_test || game_formats || (argc == 6 && std::string(argv[5]) == "--provider-nms");
     const bool use_provider = nms_inputs || (argc == 6 && std::string(argv[5]) == "--provider");
@@ -1094,6 +1098,12 @@ int main(int argc, char** argv) {
                 return r;
             };
             ffxDispatchDescUpscale d{};
+            // Switches intentionally keep the same model/context and include a
+            // return to the generic context mode after explicit transfer flags.
+            const auto dispatch_color=color_switch_test ? (color_dispatch_index%3==0 ? 0u : color_dispatch_index%3+1u) :
+                (color_mode=="pq" ? 3u : color_mode=="srgb" ? 2u : 0u);
+            if(dispatch_color==2) d.flags=FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_SRGB;
+            if(dispatch_color==3) d.flags=FFX_UPSCALE_FLAG_NON_LINEAR_COLOR_PQ;
             d.header.type=FFX_API_DISPATCH_DESC_TYPE_UPSCALE;
             d.commandList=command_buffer;
             d.color=resource(color,FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
@@ -1112,6 +1122,7 @@ int main(int argc, char** argv) {
             d.renderSize={kRenderWidth,kRenderHeight}; d.upscaleSize={kOutputWidth,kOutputHeight};
             d.jitterOffset={context_constants.jitter[0],context_constants.jitter[1]};
             d.motionVectorScale={1,1}; d.preExposure=1; d.reset=context_constants.reset;
+            if (color_switch_test) d.reset=color_dispatch_index==0;
             if (temporal_test) d.motionVectorScale={float(kRenderWidth),float(kRenderHeight)};
             if (!checked_depth_rejection) {
                 const auto valid_usage=d.depth.description.usage;
@@ -1124,6 +1135,7 @@ int main(int argc, char** argv) {
             }
             if (ffxDispatch(&api_context,&d.header)!=FFX_API_RETURN_OK)
                 throw std::runtime_error("provider dispatch failed");
+            ++color_dispatch_index;
         };
         if (use_context) {
             if (use_provider) {
@@ -1133,6 +1145,7 @@ int main(int argc, char** argv) {
                 create.maxRenderSize={max_render_width,max_render_height}; create.maxUpscaleSize={kOutputWidth,kOutputHeight};
                 if (nms_inputs) create.flags=FFX_UPSCALE_ENABLE_DEPTH_INVERTED | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
                 if (dynamic_resolution) create.flags |= FFX_UPSCALE_ENABLE_DYNAMIC_RESOLUTION;
+                if (color_mode=="nonlinear") create.flags |= FFX_UPSCALE_ENABLE_NON_LINEAR_COLORSPACE;
                 if (game_formats) create.flags |= FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE;
                 if(ffxCreateContext(&api_context,&create.header,nullptr)!=FFX_API_RETURN_OK)
                     throw std::runtime_error("provider creation failed");
@@ -1208,10 +1221,20 @@ int main(int argc, char** argv) {
               "vkQueueSubmit2/vkQueueSubmit2KHR");
         check(vkQueueWaitIdle(queue), "vkQueueWaitIdle");
 
-        if(temporal_test) {
+        if(temporal_test || color_switch_test) {
             if(!output_path.parent_path().empty())fs::create_directories(output_path.parent_path());
             std::ofstream first(output_path.string()+".frame0.rgba16f",std::ios::binary);
-            first.write(static_cast<const char*>(readback.mapped),VkDeviceSize(kOutputWidth)*kOutputHeight*8);
+            std::vector<uint8_t> first_bytes(size_t(kOutputWidth)*kOutputHeight*8);
+            std::memcpy(first_bytes.data(),readback.mapped,first_bytes.size());
+            if (nms_formats) {
+                for (size_t i=size_t(kOutputWidth)*kOutputHeight;i-- > 0;) {
+                    uint32_t p;std::memcpy(&p,first_bytes.data()+i*4,4);
+                    const uint16_t rgba[]{uint16_t((p&2047)<<4),uint16_t(((p>>11)&2047)<<4),
+                                          uint16_t((p>>22)<<5),0x3c00};
+                    std::memcpy(first_bytes.data()+i*8,rgba,8);
+                }
+            }
+            first.write(reinterpret_cast<const char*>(first_bytes.data()),first_bytes.size());
             if(!first)throw std::runtime_error("failed to save reset-frame output");
         }
 

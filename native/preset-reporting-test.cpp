@@ -77,6 +77,11 @@ int main() {
     assert(ffxCreateContext(&external,&create.header,nullptr)==FFX_API_RETURN_OK);
     assert((static_cast<ProviderContext*>(external)->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0);
     assert(ffxDestroyContext(&external,nullptr)==FFX_API_RETURN_OK);
+    create.flags|=FFX_UPSCALE_ENABLE_NON_LINEAR_COLORSPACE;
+    assert(ffxCreateContext(&external,&create.header,nullptr)==FFX_API_RETURN_OK);
+    assert((static_cast<ProviderContext*>(external)->flags & FFX_UPSCALE_ENABLE_NON_LINEAR_COLORSPACE)!=0);
+    assert(ffxDestroyContext(&external,nullptr)==FFX_API_RETURN_OK);
+    create.flags&=~FFX_UPSCALE_ENABLE_NON_LINEAR_COLORSPACE;
     create.fpMessage=messageCallback;
     missingCommand="vkCmdBindDescriptorBuffersEXT";
     assert(ffxCreateContext(&external,&create.header,nullptr)==FFX_API_RETURN_ERROR_RUNTIME_ERROR);

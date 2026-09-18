@@ -11,6 +11,9 @@ import importlib.util
 spec = importlib.util.spec_from_file_location('portable_assets', Path(__file__).with_name('portable-assets.py'))
 portable_assets = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(portable_assets)
+color_spec = importlib.util.spec_from_file_location('color_assets', Path(__file__).with_name('color-assets.py'))
+color_assets = importlib.util.module_from_spec(color_spec)
+color_spec.loader.exec_module(color_assets)
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('general', type=Path)
@@ -40,6 +43,9 @@ for manifest in sorted(a.general.glob('*/*/manifest.json')):
             portable_path = portable_root/path.relative_to(a.general)
             portable = portable_path.read_bytes()
             add_resource(portable_path, key[:-4]+'.portable.spv', portable)
+color_root = a.general.parent/'colors'
+for path in color_assets.verify(a.general,color_root):
+    add_resource(path,'colors/'+path.relative_to(color_root).as_posix(),path.read_bytes())
 (a.output/'embedded-assets.rc').write_text('\n'.join(f'{rid} RCDATA {json.dumps(str(path))}' for rid,path in resources.values())+'\n')
 (a.output/'embedded-asset-index.hpp').write_text(
     '#pragma once\nnamespace fsr4assets {\nstruct EmbeddedEntry { const char* path; unsigned id; unsigned size; };\n'

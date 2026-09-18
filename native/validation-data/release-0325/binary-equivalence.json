@@ -1,0 +1,19 @@
+{
+  "reference_sha256": "1b069c0c42dc615ce578c338dc3df4aa88e4b98e95135cd42677fc2fa49da4d2",
+  "release_sha256": "39733a9f6b4d3e99485eb8de570e779e02112d794afdbe9f5a7d870ca27e0da2",
+  "normalization": "PE image base relocations and export timestamp; debug sections excluded",
+  "runtime_sections_identical": {
+    ".text": true,
+    ".data": true,
+    ".rdata": true,
+    ".pdata": true,
+    ".xdata": true,
+    ".bss": true,
+    ".edata": true,
+    ".idata": true,
+    ".tls": true,
+    ".rsrc": true,
+    ".reloc": true
+  },
+  "embedded_manifest_identical": true
+}

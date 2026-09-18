@@ -86,6 +86,12 @@ inline bool supportsNativeMixedDot(VkPhysicalDevice physical,
                                   PFN_vkGetPhysicalDeviceFeatures2 query,
                                   PFN_vkEnumerateDeviceExtensionProperties enumerate)
 {
+#if defined(FSR4_RESEARCH_FORCE_PORTABLE)
+    // Isolated test builds only: exercise the fallback on mixed-dot hardware.
+    // Normal DLL builds never define this and retain capability-based selection.
+    (void)physical; (void)query; (void)enumerate;
+    return false;
+#endif
     uint32_t count = 0;
     if (!query || !enumerate || enumerate(physical, nullptr, &count, nullptr) != VK_SUCCESS)
         throw std::runtime_error("cannot query mixed-dot backend support");

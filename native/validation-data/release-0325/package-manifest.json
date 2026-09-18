@@ -1,0 +1,8 @@
+{
+  "OptiScaler/amd_fidelityfx_upscaler_vk.dll": "39733a9f6b4d3e99485eb8de570e779e02112d794afdbe9f5a7d870ca27e0da2",
+  "OptiScaler_fallback.dll": "0547cf39a65d9eff108ff3efb519d53cf07d186387cefb7de68fe01c62dd9fb6",
+  "readme.txt": "134ba471b97c9294d2ac858429e221df6cd878a509900d6b8b3735a754305927",
+  "LICENSES/AMD-FidelityFX-SDK-MIT.md": "be05d8cd5489deff924dbe91e0c5b8c0ff034d43cd11749bf9a67a0c38252b7b",
+  "LICENSES/OptiScaler-GPL-3.0.txt": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+  "archive_sha256": "86258c2e77e46340036b782bb3d22f9745bc6ce7ca84b3f780e098865f4d3af7"
+}
