@@ -48,11 +48,17 @@ constexpr std::uint64_t kVersionId =
     (0xF5A5CA1Eull << 32) | ((4ull << 22) | (0ull << 12) | 2ull);
 constexpr std::uint64_t kFsr314CompatibilityVersionId =
     (0xF5A5CA1Eull << 32) | ((3ull << 22) | (1ull << 12) | 4ull);
-constexpr const char* kVersionName = "4.0.2c Vulkan INT8";
+constexpr std::uint64_t kVersion411Id =
+    (0xF5A5CA1Eull << 32) | ((4ull << 22) | (1ull << 12) | 1ull);
+// The installed VK INT8 selector prefixes these verbatim with "FSR".
+// Keep the leading space here; version IDs, not labels, select the model.
+constexpr const char* kVersionName = " 4.0.2 VK INT8";
+constexpr const char* kVersion411Name = " 4.1.1 VK INT8";
 
 struct ProviderContext {
     inline static std::atomic<std::uint64_t> next_id{0};
     const std::uint64_t diagnostic_id=++next_id;
+    std::uint64_t version = kVersionId;
     VkDevice device = VK_NULL_HANDLE;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     PFN_vkGetDeviceProcAddr getDeviceProcAddr = nullptr;
@@ -259,8 +265,8 @@ ffxReturnCode_t queryUpscale(ffxContext* context, ffxQueryDescHeader* header) {
     case FFX_API_QUERY_DESC_TYPE_GET_PROVIDER_VERSION: {
         auto* query = reinterpret_cast<ffxQueryGetProviderVersion*>(header);
         if (!context || !*context) return FFX_API_RETURN_ERROR_PARAMETER;
-        query->versionId = kVersionId;
-        query->versionName = kVersionName;
+        query->versionId = static_cast<ProviderContext*>(*context)->version;
+        query->versionName = query->versionId==kVersion411Id ? kVersion411Name : kVersionName;
         return FFX_API_RETURN_OK;
     }
     case FFX_API_QUERY_DESC_TYPE_UPSCALE_GETUPSCALERATIOFROMQUALITYMODE: {
@@ -342,8 +348,8 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
     const auto version = findVersion(header);
     // Well-behaved callers query this DLL and request kVersionId. Some games
     // loading amd_fidelityfx_vk.dll pin the stock FSR 3.1.4 provider ID
-    // instead; accept that ABI-compatible selection as a compatibility alias.
-    if (version != 0 && version != kVersionId &&
+    // instead; accept that ABI-compatible selection as a drop-in alias.
+    if (version != 0 && version != kVersionId && version != kVersion411Id &&
         version != kFsr314CompatibilityVersionId) {
         return FFX_API_RETURN_NO_PROVIDER;
     }
@@ -356,6 +362,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
     void* storage = allocate(callbacks, sizeof(ProviderContext));
     if (!storage) return FFX_API_RETURN_ERROR_MEMORY;
     auto* provider = new (storage) ProviderContext{};
+    provider->version = version==kVersion411Id ? kVersion411Id : kVersionId;
     provider->device = backend->device;
     provider->physicalDevice = backend->physicalDevice;
     provider->getDeviceProcAddr = backend->getDeviceProcAddr;
@@ -365,7 +372,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
     provider->maxUpscaleSize = create->maxUpscaleSize;
     provider->message = create->fpMessage;
     try {
-        const auto assets=asset_root();
+        const auto assets=version==kVersion411Id ? asset_root()/"fsr411" : asset_root();
         provider->assets=assets;
         const bool embedded=fsr4assets::is_embedded(assets);
         if (!embedded) {
@@ -403,6 +410,8 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
                    std::to_string(create->maxRenderSize.height)+" max_output="+
                    std::to_string(create->maxUpscaleSize.width)+"x"+
                    std::to_string(create->maxUpscaleSize.height));
+        diagnostic(*provider,std::string("version=")+
+                   (provider->version==kVersion411Id ? kVersion411Name : kVersionName));
         const uint32_t required_flags = FFX_UPSCALE_ENABLE_DEPTH_INVERTED;
         const uint32_t permutation = create->flags & ~(FFX_UPSCALE_ENABLE_DEBUG_CHECKING | FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE |
                                                         FFX_UPSCALE_ENABLE_DYNAMIC_RESOLUTION | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE |
@@ -478,7 +487,11 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxQuery(
             if (query->versionIds) query->versionIds[0] = kVersionId;
             if (query->versionNames) query->versionNames[0] = kVersionName;
         }
-        *query->outputCount = 1;
+        if (capacity > 1) {
+            if (query->versionIds) query->versionIds[1] = kVersion411Id;
+            if (query->versionNames) query->versionNames[1] = kVersion411Name;
+        }
+        *query->outputCount = 2;
         return FFX_API_RETURN_OK;
     }
     return queryUpscale(context, header);
@@ -576,7 +589,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                 provider->maxRenderSize.width,provider->maxRenderSize.height,
                 provider->maxUpscaleSize.width,provider->maxUpscaleSize.height,
                 provider->apiVersion,
-                (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0);
+                (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0,provider->version==kVersion411Id);
             core=created.get();
             provider->cores[selected_preset]=std::move(created);
             if(!provider->diagnostic_path.empty()) {
@@ -621,7 +634,11 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         const auto output = resource("output",d.output,ow,oh,packed_output ? FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT : FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,
             packed_output ? VK_FORMAT_B10G11R11_UFLOAT_PACK32 : VK_FORMAT_R16G16B16A16_SFLOAT,FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
         fsr4core::OptimizedConstants c{};
-        const auto padded_w=fsr4::round_up(ow,8),padded_h=fsr4::round_up(oh,8);
+        const bool fsr411=provider->version==kVersion411Id;
+        // Unlike 4.0.2, 4.1.1 keeps image sampling at the exact output size.
+        // Its recorder separately pads the neural tensors to eight pixels.
+        const auto padded_w=fsr411 ? ow : fsr4::round_up(ow,8);
+        const auto padded_h=fsr411 ? oh : fsr4::round_up(oh,8);
         c.inv_size[0]=1.f/padded_w; c.inv_size[1]=1.f/padded_h;
         c.scale[0]=float(padded_w)/rw; c.scale[1]=float(padded_h)/rh;
         c.inv_scale[0]=1.f/c.scale[0]; c.inv_scale[1]=1.f/c.scale[1];
@@ -630,7 +647,8 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         // consumes normalized UV displacement. Only low-resolution MV is supported.
         c.mv_scale[0]=d.motionVectorScale.x/d.renderSize.width;
         c.mv_scale[1]=d.motionVectorScale.y/d.renderSize.height;
-        c.tex_size[0]=fsr4::round_up(provider->maxUpscaleSize.width,8); c.tex_size[1]=fsr4::round_up(provider->maxUpscaleSize.height,8);
+        c.tex_size[0]=fsr411 ? provider->maxUpscaleSize.width : fsr4::round_up(provider->maxUpscaleSize.width,8);
+        c.tex_size[1]=fsr411 ? provider->maxUpscaleSize.height : fsr4::round_up(provider->maxUpscaleSize.height,8);
         c.max_render_size[0]=provider->maxRenderSize.width;
         c.max_render_size[1]=provider->maxRenderSize.height;
         c.width=padded_w; c.height=padded_h; c.width_lr=rw; c.height_lr=rh;

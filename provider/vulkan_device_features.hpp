@@ -202,6 +202,12 @@ class DeviceFeatures
                       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES);
             FSR4_COPY(VkPhysicalDeviceBufferDeviceAddressFeatures,
                       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES);
+            FSR4_COPY(VkPhysicalDeviceVulkanMemoryModelFeatures,
+                      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES);
+            FSR4_COPY(VkPhysicalDeviceUniformBufferStandardLayoutFeatures,
+                      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES);
+            FSR4_COPY(VkPhysicalDeviceScalarBlockLayoutFeatures,
+                      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES);
             FSR4_COPY(VkPhysicalDeviceBufferDeviceAddressFeaturesEXT,
                       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_EXT);
             FSR4_COPY(VkPhysicalDeviceShaderIntegerDotProductFeatures,
@@ -477,6 +483,31 @@ class DeviceFeatures
         auto* e13 = core13
                         ? find<VkPhysicalDeviceVulkan13Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES)
                         : nullptr;
+        // The upstream host may enable the Vulkan memory model before calling
+        // us. Our shader atomics use device scope, so complete that contract on
+        // our owned copy without changing the application's feature chain.
+        auto* memoryModel = find<VkPhysicalDeviceVulkanMemoryModelFeatures>(
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES);
+        if ((e12 && e12->vulkanMemoryModel) || (memoryModel && memoryModel->vulkanMemoryModel))
+        {
+            VkBool32 deviceScope = v12.vulkanMemoryModelDeviceScope;
+            if (!core12)
+            {
+                VkPhysicalDeviceVulkanMemoryModelFeatures supported {
+                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES
+                };
+                VkPhysicalDeviceFeatures2 features { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+                features.pNext = &supported;
+                query(physical, &features);
+                deviceScope = supported.vulkanMemoryModelDeviceScope;
+            }
+            if (!deviceScope)
+                throw std::runtime_error("missing FSR4 device feature: vulkanMemoryModelDeviceScope");
+            if (e12 && e12->vulkanMemoryModel)
+                e12->vulkanMemoryModelDeviceScope = VK_TRUE;
+            if (memoryModel && memoryModel->vulkanMemoryModel)
+                memoryModel->vulkanMemoryModelDeviceScope = VK_TRUE;
+        }
         if (e12)
         {
             e12->shaderFloat16 = e12->shaderInt8 = e12->storageBuffer8BitAccess = e12->runtimeDescriptorArray =

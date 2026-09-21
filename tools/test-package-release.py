@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the two-OptiScaler package layout and input validation."""
+"""Check the release/debug provider package layout and input validation."""
 from pathlib import Path
 import subprocess
 import sys
@@ -13,21 +13,22 @@ class PackageTests(unittest.TestCase):
     def test_both_binaries_and_reject_invalid_dll(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory)
-            payloads={'provider.dll':b'MZprovider','primary.dll':b'MZprimary','fallback.dll':b'MZfallback'}
+            payloads={'provider.dll':b'MZprovider','primary.dll':b'MZprimary','debug.dll':b'MZdebug'}
             for name,data in payloads.items():(root/name).write_bytes(data)
             archive=root/'release.zip'
             args=[sys.executable,str(ROOT/'tools/package-release.py'),
                   '--provider',str(root/'provider.dll'),'--optiscaler',str(root/'primary.dll'),
-                  '--optiscaler-fallback',str(root/'fallback.dll'),'--output',str(archive)]
+                  '--provider-debug',str(root/'debug.dll'),'--output',str(archive)]
             subprocess.run(args,check=True,capture_output=True)
             with zipfile.ZipFile(archive) as z:
                 self.assertEqual(set(z.namelist()),{'OptiScaler/amd_fidelityfx_upscaler_vk.dll',
-                    'OptiScaler.dll','OptiScaler_fallback.dll','readme.txt',
-                    'LICENSES/AMD-FidelityFX-SDK-MIT.md','LICENSES/OptiScaler-GPL-3.0.txt'})
+                    'OptiScaler.dll','OptiScaler/amd_fidelityfx_upscaler_vk_debug.dll','readme.txt',
+                    'LICENSES/AMD-FidelityFX-SDK-MIT.md','LICENSES/OptiScaler-GPL-3.0.txt',
+                    'LICENSES/Zstandard-BSD.txt'})
                 self.assertEqual(z.read('OptiScaler.dll'),payloads['primary.dll'])
-                self.assertEqual(z.read('OptiScaler_fallback.dll'),payloads['fallback.dll'])
-                self.assertEqual(z.read('readme.txt'),(ROOT/'release/readme.txt').read_bytes())
-            (root/'fallback.dll').write_bytes(b'invalid')
+                self.assertEqual(z.read('OptiScaler/amd_fidelityfx_upscaler_vk_debug.dll'),payloads['debug.dll'])
+                self.assertEqual(z.read('readme.txt'),(ROOT/'readme.txt').read_bytes())
+            (root/'debug.dll').write_bytes(b'invalid')
             args[-1]=str(root/'invalid.zip')
             self.assertNotEqual(subprocess.run(args,capture_output=True).returncode,0)
             self.assertFalse((root/'invalid.zip').exists())

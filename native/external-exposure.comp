@@ -6,8 +6,18 @@
 // mutable image heap; they access different descriptors.
 layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
 layout(set=1,binding=1) uniform texture2D sourceImages[128];
-layout(set=1,binding=1,r32f) uniform writeonly image2D destinationImages[128];
+layout(set=1,binding=1,r32f) uniform image2D destinationImages[128];
+// Only the adapter uses this push word; the captured SPD pass keeps its
+// original physical-constant-address push layout.
+layout(push_constant) uniform ExternalExposureControl { uint resetHistory; } control;
 void main() {
     float exposure=texelFetch(sourceImages[93],ivec2(0),0).r;
-    imageStore(destinationImages[92],ivec2(0),vec4(exposure==0.0 ? 1.0 : exposure));
+    exposure=exposure==0.0 ? 1.0 : exposure;
+    // 4.1.1 re-exposes temporal history using t17[1]. The old adapter
+    // populated only t17[0], leaving a zero divisor on temporal frames.
+    // Preserve the actual preceding frame, not the current exposure twice.
+    float previous=imageLoad(destinationImages[92],ivec2(0)).r;
+    if (control.resetHistory!=0u) previous=exposure;
+    imageStore(destinationImages[92],ivec2(1,0),vec4(previous));
+    imageStore(destinationImages[92],ivec2(0),vec4(exposure));
 }

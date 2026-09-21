@@ -1,6 +1,17 @@
 #include <vulkan/vulkan.h>
 #include "quality-recorder.hpp"
+// Isolated benchmark instrumentation; never compiled into the provider DLL.
+static VkQueryPool tracked_pass_queries = VK_NULL_HANDLE;
+static VkResult track_query_pool(VkDevice device,const VkQueryPoolCreateInfo* info,
+    const VkAllocationCallbacks* alloc,VkQueryPool* output) {
+    const auto result = vkCreateQueryPool(device,info,alloc,output);
+    if (result==VK_SUCCESS && info->queryType==VK_QUERY_TYPE_TIMESTAMP && (info->queryCount==30 || info->queryCount==56))
+        tracked_pass_queries=*output;
+    return result;
+}
+#define vkCreateQueryPool track_query_pool
 #include "quality-context.hpp"
+#undef vkCreateQueryPool
 #include "experimental-resolution.hpp"
 #include "../provider/vulkan_device_features.hpp"
 #include <memory>
@@ -20,6 +31,7 @@ struct CreateBackendVkDesc {
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -293,8 +305,10 @@ float reference_jitter(unsigned frame_index, unsigned base) {
     return result - 0.5f;
 }
 
-void generate_reference_frame(FrameInputs& inputs, unsigned frame_index = 0) {
-    if (frame_index > 1) throw std::invalid_argument("reference harness currently supports frames zero and one");
+void generate_reference_frame(FrameInputs& inputs, unsigned frame_index = 0, bool extended_sequence = false) {
+    // Frames 0/1 remain the oracle sequence; later frames are research inputs.
+    if ((!extended_sequence && frame_index > 1) || frame_index >= 120)
+        throw std::invalid_argument("unsupported reference frame index");
     const std::size_t pixels = static_cast<std::size_t>(kRenderWidth) * kRenderHeight;
     inputs.color.resize(pixels * 4);
     inputs.depth.resize(pixels);
@@ -407,6 +421,23 @@ int main(int argc, char** argv) {
     const bool nms_inputs = temporal_test || game_formats || (argc == 6 && std::string(argv[5]) == "--provider-nms");
     const bool use_provider = nms_inputs || (argc == 6 && std::string(argv[5]) == "--provider");
     const bool use_context = use_provider || (argc == 6 && std::string(argv[5]) == "--context");
+    const bool external_exposure_test = std::getenv("FSR4_TEST_EXTERNAL_EXPOSURE") != nullptr;
+    const auto test_float=[](const char* name,float fallback) {
+        if(const char* value=std::getenv(name)) {
+            char* end=nullptr; const float parsed=std::strtof(value,&end);
+            if(end==value || *end || !std::isfinite(parsed) || parsed<0)
+                throw std::invalid_argument(std::string("invalid ")+name);
+            return parsed;
+        }
+        return fallback;
+    };
+    const float first_exposure=test_float("FSR4_TEST_EXTERNAL_EXPOSURE",1.f);
+    const float second_exposure=test_float("FSR4_TEST_SECOND_EXPOSURE",first_exposure);
+    const float first_pre_exposure=test_float("FSR4_TEST_PRE_EXPOSURE",1.f);
+    const float second_pre_exposure=test_float("FSR4_TEST_SECOND_PRE_EXPOSURE",first_pre_exposure);
+    const bool reset_second=std::getenv("FSR4_TEST_RESET_SECOND_FRAME")!=nullptr;
+    if(external_exposure_test && !temporal_test)return 2;
+    if(first_pre_exposure<=0 || second_pre_exposure<=0)return 2;
     if (argc == 6 && !use_context) return 2;
     const auto read_size=[](const char* name,uint32_t& w,uint32_t& h) {
         if(const char* value=std::getenv(name)) {
@@ -428,18 +459,30 @@ int main(int argc, char** argv) {
           fsr4::validate_dimensions(kRenderWidth,kRenderHeight,kOutputWidth,kOutputHeight); }
     catch(const std::exception& e) { std::cerr<<e.what()<<'\n';return 2; }
     if((std::getenv("FSR4_TEST_RENDER_SIZE") || std::getenv("FSR4_TEST_OUTPUT_SIZE")) && !temporal_test)return 2;
+    unsigned benchmark_frames = 0;
+    if (const char* value = std::getenv("FSR4_TEST_PROFILE_FRAMES")) {
+        char extra = 0;
+        if (!temporal_test || resize_input || std::sscanf(value,"%u%c",&benchmark_frames,&extra)!=1 ||
+            benchmark_frames < 2 || benchmark_frames > 120) return 2;
+#if !defined(FSR4_EXTERNAL_PROVIDER)
+        const char* profile = std::getenv("FSR4_VK_PROFILE_PATH");
+        if (!profile || !*profile) return 2;
+#endif
+    }
 #if defined(FSR4_EXTERNAL_PROVIDER)
     auto module = LoadLibraryA("amd_fidelityfx_upscaler_vk.dll");
     if (!module) { std::cerr << "provider DLL load failed: " << GetLastError() << '\n'; return 1; }
     auto ffxCreateContext = reinterpret_cast<PfnFfxCreateContext>(GetProcAddress(module,"ffxCreateContext"));
+    auto ffxQuery = reinterpret_cast<PfnFfxQuery>(GetProcAddress(module,"ffxQuery"));
     auto ffxDispatch = reinterpret_cast<PfnFfxDispatch>(GetProcAddress(module,"ffxDispatch"));
     auto ffxDestroyContext = reinterpret_cast<PfnFfxDestroyContext>(GetProcAddress(module,"ffxDestroyContext"));
-    if (!ffxCreateContext || !ffxDispatch || !ffxDestroyContext) return 1;
+    if (!ffxCreateContext || !ffxQuery || !ffxDispatch || !ffxDestroyContext) return 1;
 #endif
     ffxContext api_context = nullptr;
     std::unique_ptr<fsr4core::QualityContext> context;
     VkInstance instance = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
+    VkQueryPool benchmark_queries = VK_NULL_HANDLE;
     VkSampler sampler = VK_NULL_HANDLE;
     VkCommandPool command_pool = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
@@ -474,6 +517,12 @@ int main(int argc, char** argv) {
                   << VK_API_VERSION_MINOR(application.apiVersion) << '\n';
 
         const std::uint32_t queue_family = compute_queue_family(physical_device);
+        uint32_t queue_count = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_device,&queue_count,nullptr);
+        std::vector<VkQueueFamilyProperties> queue_properties(queue_count);
+        vkGetPhysicalDeviceQueueFamilyProperties(physical_device,&queue_count,queue_properties.data());
+        const auto timestamp_bits = queue_properties.at(queue_family).timestampValidBits;
+        if (benchmark_frames && !timestamp_bits) throw std::runtime_error("queue timestamps unavailable");
         const float priority = 1.0f;
         VkDeviceQueueCreateInfo queue_info{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
         queue_info.queueFamilyIndex = queue_family;
@@ -500,6 +549,17 @@ int main(int argc, char** argv) {
 
         const fsr4vk::DeviceDispatch promoted_dispatch(
             device, vkGetDeviceProcAddr, application.apiVersion);
+        std::ofstream benchmark_log;
+        if (benchmark_frames) {
+            if (!output_path.parent_path().empty()) fs::create_directories(output_path.parent_path());
+            const auto log_path=output_path.string()+".timings.jsonl";
+            if (fs::exists(log_path)) throw std::runtime_error("refusing to replace timing report");
+            benchmark_log.open(log_path);
+            if (!benchmark_log) throw std::runtime_error("cannot create timing report");
+            VkQueryPoolCreateInfo info{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+            info.queryType=VK_QUERY_TYPE_TIMESTAMP; info.queryCount=2;
+            check(vkCreateQueryPool(device,&info,nullptr,&benchmark_queries),"benchmark query pool");
+        }
         command_pipeline_barrier2 = promoted_dispatch.cmd_pipeline_barrier2;
         get_buffer_device_address = promoted_dispatch.get_buffer_device_address;
 
@@ -794,7 +854,7 @@ int main(int argc, char** argv) {
         std::memcpy(staging_bytes, color_data, color_size);
         std::memcpy(staging_bytes + color_size, frame.depth.data(), depth_size);
         std::memcpy(staging_bytes + color_size + depth_size, frame.motion.data(), motion_size);
-        const float exposure = 1.0f;
+        const float exposure = first_exposure;
         std::memcpy(staging_bytes + exposure_offset, &exposure, sizeof(exposure));
         const VkDeviceSize output_size =
             static_cast<VkDeviceSize>(kOutputWidth) * kOutputHeight * 8;
@@ -864,7 +924,7 @@ int main(int argc, char** argv) {
         main_constants.reset = 1;
         main_constants.width_lr = kRenderWidth;
         main_constants.height_lr = kRenderHeight;
-        main_constants.pre_exposure = 1.0f;
+        main_constants.pre_exposure = first_pre_exposure;
         main_constants.previous_pre_exposure = 0.0f;
         std::memcpy(constants.mapped, &main_constants, sizeof(main_constants));
         // VKD3D stages the pre-pass CBVs into one physical-address upload ring:
@@ -1110,7 +1170,7 @@ int main(int argc, char** argv) {
             d.depth=resource(depth,FFX_API_SURFACE_FORMAT_R32_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
             d.motionVectors=resource(motion,FFX_API_SURFACE_FORMAT_R16G16_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
             d.exposure=resource(exposure_image,FFX_API_SURFACE_FORMAT_R32_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
-            if (nms_inputs) d.exposure={};
+            if (nms_inputs && !external_exposure_test) d.exposure={};
             d.output=resource(output,FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
             if (game_formats) {
                 d.color.description.format=doom_formats ? FFX_API_SURFACE_FORMAT_R9G9B9E5_SHAREDEXP :
@@ -1121,7 +1181,7 @@ int main(int argc, char** argv) {
             }
             d.renderSize={kRenderWidth,kRenderHeight}; d.upscaleSize={kOutputWidth,kOutputHeight};
             d.jitterOffset={context_constants.jitter[0],context_constants.jitter[1]};
-            d.motionVectorScale={1,1}; d.preExposure=1; d.reset=context_constants.reset;
+            d.motionVectorScale={1,1}; d.preExposure=context_constants.pre_exposure; d.reset=context_constants.reset;
             if (color_switch_test) d.reset=color_dispatch_index==0;
             if (temporal_test) d.motionVectorScale={float(kRenderWidth),float(kRenderHeight)};
             if (!checked_depth_rejection) {
@@ -1137,18 +1197,98 @@ int main(int argc, char** argv) {
                 throw std::runtime_error("provider dispatch failed");
             ++color_dispatch_index;
         };
+        double record_cpu_ms=0;
+        const auto record_profiled_context = [&] {
+            if (benchmark_queries) {
+                vkCmdResetQueryPool(command_buffer,benchmark_queries,0,2);
+                promoted_dispatch.cmd_write_timestamp2(command_buffer,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,benchmark_queries,0);
+            }
+            const auto begin_cpu=std::chrono::steady_clock::now();
+            record_context();
+            record_cpu_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin_cpu).count();
+            if (benchmark_queries)
+                promoted_dispatch.cmd_write_timestamp2(command_buffer,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,benchmark_queries,1);
+        };
+        const auto collect_profile = [&](unsigned frame_index) {
+            if (!benchmark_queries) return;
+#if !defined(FSR4_EXTERNAL_PROVIDER)
+            const auto* provider = reinterpret_cast<const ProviderContext*>(api_context);
+            if (!provider || provider->cores.size()!=1 || !tracked_pass_queries)
+                throw std::runtime_error("unexpected benchmark core/query count");
+            std::array<uint64_t,2> whole{};
+            std::array<uint64_t,56> times{};
+            const auto pass_count=provider->version==kVersion411Id ? 28u : 15u;
+            check(vkGetQueryPoolResults(device,benchmark_queries,0,2,sizeof(whole),whole.data(),sizeof(uint64_t),VK_QUERY_RESULT_64_BIT),"context timestamps");
+            check(vkGetQueryPoolResults(device,tracked_pass_queries,0,pass_count*2,sizeof(times),times.data(),sizeof(uint64_t),VK_QUERY_RESULT_64_BIT),"pass timestamps");
+            const uint64_t mask=timestamp_bits>=64 ? ~uint64_t(0) : (uint64_t(1)<<timestamp_bits)-1;
+            const auto ms=[&](uint64_t a,uint64_t b) {return double((b-a)&mask)*physical_properties.limits.timestampPeriod/1e6;};
+            std::vector<uint16_t> cached_pixels(output_size/2);
+            std::memcpy(cached_pixels.data(),readback.mapped,output_size);
+            const auto* pixels=cached_pixels.data();
+            for(size_t i=0;i<output_size/2;++i)
+                if((pixels[i]&0x7c00)==0x7c00) throw std::runtime_error("nonfinite benchmark output");
+            benchmark_log << std::setprecision(12) << "{\"frame\":" << frame_index
+                << ",\"context_gpu_ms\":" << ms(whole[0],whole[1])
+                << ",\"record_cpu_ms\":" << record_cpu_ms
+                << ",\"output_fnv1a64\":\"" << std::hex
+                << fnv1a64(reinterpret_cast<const uint8_t*>(pixels),output_size) << std::dec << "\",\"passes\":{";
+            for(unsigned i=0;i<pass_count;++i) {
+                if(i) benchmark_log << ',';
+                benchmark_log << '\"' << (i==0 ? "auto_exposure" : pass_count==28 ? fsr4::k411PassNames[i-1] : kPasses[i-1].name)
+                              << "\":" << ms(times[i*2],times[i*2+1]);
+            }
+            benchmark_log << "}}\n";
+            if(!benchmark_log) throw std::runtime_error("cannot write timing report");
+#else
+            // Time the actual loaded DLL, without enabling its internal
+            // per-pass instrumentation or needing private provider structs.
+            std::array<uint64_t,2> whole{};
+            check(vkGetQueryPoolResults(device,benchmark_queries,0,2,sizeof(whole),whole.data(),sizeof(uint64_t),VK_QUERY_RESULT_64_BIT),"DLL context timestamps");
+            const uint64_t mask=timestamp_bits>=64 ? ~uint64_t(0) : (uint64_t(1)<<timestamp_bits)-1;
+            const double gpu_ms=double((whole[1]-whole[0])&mask)*physical_properties.limits.timestampPeriod/1e6;
+            // Read mapped GPU memory once, then validate/hash cached host
+            // memory. Bytewise PCIe reads would stall between submissions.
+            std::vector<uint16_t> cached_pixels(output_size/2);
+            std::memcpy(cached_pixels.data(),readback.mapped,output_size);
+            const auto* pixels=cached_pixels.data();
+            for(size_t i=0;i<output_size/2;++i)
+                if((pixels[i]&0x7c00)==0x7c00) throw std::runtime_error("nonfinite benchmark output");
+            benchmark_log << std::setprecision(12) << "{\"frame\":" << frame_index
+                << ",\"context_gpu_ms\":" << gpu_ms << ",\"record_cpu_ms\":" << record_cpu_ms
+                << ",\"output_fnv1a64\":\"" << std::hex
+                << fnv1a64(reinterpret_cast<const uint8_t*>(pixels),output_size) << std::dec << "\"}\n";
+            if(!benchmark_log) throw std::runtime_error("cannot write DLL timing report");
+#endif
+        };
         if (use_context) {
             if (use_provider) {
                 CreateBackendVkDesc backend{{3,nullptr},device,physical_device,vkGetDeviceProcAddr};
+                ffxOverrideVersion model_version{};
+                model_version.header.type=FFX_API_DESC_TYPE_OVERRIDE_VERSION;
+                if (const char* version=std::getenv("FSR4_TEST_VERSION")) {
+                    if(std::string(version)!="4.1.1" && std::string(version)!="4.0.2")
+                        throw std::invalid_argument("FSR4_TEST_VERSION must be 4.0.2 or 4.1.1");
+                    model_version.versionId=(0xF5A5CA1Eull<<32) | (4ull<<22) |
+                        (std::string(version)=="4.1.1" ? (1ull<<12)|1ull : 2ull);
+                    backend.header.pNext=&model_version.header;
+                }
                 ffxCreateContextDescUpscale create{};
                 create.header={FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE,&backend.header};
                 create.maxRenderSize={max_render_width,max_render_height}; create.maxUpscaleSize={kOutputWidth,kOutputHeight};
                 if (nms_inputs) create.flags=FFX_UPSCALE_ENABLE_DEPTH_INVERTED | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
+                if (external_exposure_test) create.flags &= ~FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
                 if (dynamic_resolution) create.flags |= FFX_UPSCALE_ENABLE_DYNAMIC_RESOLUTION;
                 if (color_mode=="nonlinear") create.flags |= FFX_UPSCALE_ENABLE_NON_LINEAR_COLORSPACE;
                 if (game_formats) create.flags |= FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE;
                 if(ffxCreateContext(&api_context,&create.header,nullptr)!=FFX_API_RETURN_OK)
                     throw std::runtime_error("provider creation failed");
+                ffxQueryGetProviderVersion selected{};
+                selected.header.type=FFX_API_QUERY_DESC_TYPE_GET_PROVIDER_VERSION;
+                const uint64_t expected=model_version.versionId ? model_version.versionId :
+                    (0xF5A5CA1Eull<<32)|(4ull<<22)|2ull;
+                if(ffxQuery(&api_context,&selected.header)!=FFX_API_RETURN_OK || selected.versionId!=expected)
+                    throw std::runtime_error("provider selected the wrong model version");
+                std::cout << "selected_provider=" << selected.versionName << '\n';
             } else {
                 context = std::make_unique<fsr4core::QualityContext>(
                     physical_device, device, shader_dir, initializer_path,
@@ -1156,7 +1296,7 @@ int main(int argc, char** argv) {
                     fsr4experiment::render_width, fsr4experiment::render_height,
                     kOutputWidth, kOutputHeight, application.apiVersion);
             }
-            record_context();
+            record_profiled_context();
         } else {
             fsr4::record_quality_frame(
                 command_buffer, pipeline_layout, pipelines, descriptor_addresses,
@@ -1166,7 +1306,7 @@ int main(int argc, char** argv) {
                 VK_NULL_HANDLE, 0, kOutputWidth, kOutputHeight,
                 command_pipeline_barrier2, promoted_dispatch.cmd_write_timestamp2);
         }
-        std::cout << "dispatch=quality-frame passes=" << kPasses.size() + (nms_inputs ? 1 : 0)
+        std::cout << "dispatch=quality-frame passes=" << (std::getenv("FSR4_TEST_VERSION") && std::string(std::getenv("FSR4_TEST_VERSION"))=="4.1.1" ? 28 : kPasses.size() + (nms_inputs ? 1 : 0))
                   << " status=recorded\n";
 
         const std::array<const Image*, 3> inspected_images{{
@@ -1220,6 +1360,7 @@ int main(int argc, char** argv) {
         check(promoted_dispatch.queue_submit2(queue, 1, &submit, VK_NULL_HANDLE),
               "vkQueueSubmit2/vkQueueSubmit2KHR");
         check(vkQueueWaitIdle(queue), "vkQueueWaitIdle");
+        collect_profile(0);
 
         if(temporal_test || color_switch_test) {
             if(!output_path.parent_path().empty())fs::create_directories(output_path.parent_path());
@@ -1242,9 +1383,9 @@ int main(int argc, char** argv) {
             // Exercise descriptor/event reuse beyond the eight allocated slots.
             // Reset frames use the same oracle input; temporal frames are a
             // lifetime smoke test, not an image-quality oracle.
-            const unsigned last_frame=temporal_test ? 1 : 18;
+            const unsigned last_frame=benchmark_frames ? benchmark_frames-1 : (temporal_test ? 1 : 18);
             for (unsigned frame_index = 1; frame_index <= last_frame; ++frame_index) {
-                if ((frame_index - 1) % 8 == 0) {
+                if (benchmark_frames || (frame_index - 1) % 8 == 0) {
                 check(vkResetCommandPool(device, command_pool, 0), "vkResetCommandPool");
                 check(vkBeginCommandBuffer(command_buffer, &begin), "vkBeginCommandBuffer(reuse)");
                 }
@@ -1267,7 +1408,7 @@ int main(int argc, char** argv) {
                                 VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
                         }
                     }
-                    generate_reference_frame(frame,1);
+                    generate_reference_frame(frame,frame_index,benchmark_frames!=0);
                     for (auto& z:frame.depth) z=1.0f-z;
                     const VkDeviceSize next_color_size=frame.color.size()*2,next_depth_size=frame.depth.size()*4;
                     std::memcpy(staging_bytes,frame.color.data(),next_color_size);
@@ -1275,18 +1416,29 @@ int main(int argc, char** argv) {
                     std::memcpy(staging_bytes+next_color_size+next_depth_size,frame.motion.data(),frame.motion.size()*2);
                     for (const Image* input : {&color,&depth,&motion})
                         image_barrier(command_buffer,input->image,resize_input ? VK_IMAGE_LAYOUT_UNDEFINED :
-                            (input==&color ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
+                            (input==&color && frame_index==1 ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,VK_ACCESS_2_MEMORY_READ_BIT,
                             VK_PIPELINE_STAGE_2_COPY_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT);
                     copy_to_image(color,0); copy_to_image(depth,next_color_size); copy_to_image(motion,next_color_size+next_depth_size);
                     for (const Image* input : {&color,&depth,&motion})
                         image_barrier(command_buffer,input->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                             VK_PIPELINE_STAGE_2_COPY_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-                    context_constants.reset=0;
-                    context_constants.jitter[0]=reference_jitter(1, 2);
-                    context_constants.jitter[1]=reference_jitter(1, 3);
+                    if(external_exposure_test) {
+                        std::memcpy(staging_bytes+exposure_offset,&second_exposure,sizeof(second_exposure));
+                        image_barrier(command_buffer,exposure_image.image,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                            VK_PIPELINE_STAGE_2_COPY_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT);
+                        copy_to_image(exposure_image,exposure_offset);
+                        image_barrier(command_buffer,exposure_image.image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,VK_PIPELINE_STAGE_2_COPY_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                            VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+                    }
+                    context_constants.pre_exposure=second_pre_exposure;
+                    context_constants.reset=reset_second && frame_index==1;
+                    context_constants.jitter[0]=reference_jitter(frame_index, 2);
+                    context_constants.jitter[1]=reference_jitter(frame_index, 3);
                 }
-                record_context();
+                record_profiled_context();
                 image_barrier(command_buffer, output.image, VK_IMAGE_LAYOUT_GENERAL,
                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                     VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT, VK_PIPELINE_STAGE_2_COPY_BIT,
@@ -1294,10 +1446,10 @@ int main(int argc, char** argv) {
                 VkBufferImageCopy copy{};
                 copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
                 copy.imageExtent = {kOutputWidth, kOutputHeight, 1};
-                if (frame_index == last_frame) vkCmdCopyImageToBuffer(command_buffer, output.image,
+                if (benchmark_frames || frame_index == last_frame) vkCmdCopyImageToBuffer(command_buffer, output.image,
                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback.buffer, 1, &copy);
-                if (frame_index % 8 == 0 || frame_index == last_frame) {
-                if (frame_index % 8 == 0) {
+                if (benchmark_frames || frame_index % 8 == 0 || frame_index == last_frame) {
+                if (!benchmark_frames && frame_index % 8 == 0) {
                     bool rejected = false;
                     try { record_context(); }
                     catch (const std::runtime_error&) { rejected = true; }
@@ -1307,9 +1459,12 @@ int main(int argc, char** argv) {
                 check(promoted_dispatch.queue_submit2(queue, 1, &submit, VK_NULL_HANDLE),
                       "vkQueueSubmit2/vkQueueSubmit2KHR(reuse)");
                 check(vkQueueWaitIdle(queue), "vkQueueWaitIdle(reuse)");
+                collect_profile(frame_index);
                 }
             }
-            if (temporal_test) std::cout << "context_frames=2 moving_reference_frame=1 reset=false\n";
+            if (benchmark_frames) std::cout << "context_frames=" << benchmark_frames << " temporal_sequence=true individual_submissions=true\n";
+            else if (temporal_test) std::cout << "context_frames=2 moving_reference_frame=1 reset="
+                                            << (reset_second ? "true" : "false") << '\n';
             else std::cout << "context_frames=19 batch_size=8 overflow=rejected slot_reuse=passed temporal_frame=17 reset_frame=18\n";
         }
 
@@ -1331,12 +1486,19 @@ int main(int argc, char** argv) {
         output_stream.write(static_cast<const char*>(readback.mapped), output_size);
         if (!output_stream) throw std::runtime_error("failed to write output image");
         const auto* output_bytes = static_cast<const std::uint8_t*>(readback.mapped);
-        const auto* scratch_bytes = static_cast<const std::uint8_t*>(scratch.mapped);
-        const auto scratch_nonzero = std::count_if(
-            scratch_bytes, scratch_bytes + scratch.size,
-            [](std::uint8_t value) { return value != 0; });
-        if (!use_context) std::cout << "scratch_nonzero_bytes=" << scratch_nonzero << '\n';
-        const auto print_image_stats = [&](const char* name, const std::uint8_t* bytes) {
+        if (!use_context) {
+            const auto* scratch_bytes = static_cast<const std::uint8_t*>(scratch.mapped);
+            const auto scratch_nonzero = std::count_if(
+                scratch_bytes, scratch_bytes + scratch.size,
+                [](std::uint8_t value) { return value != 0; });
+            std::cout << "scratch_nonzero_bytes=" << scratch_nonzero << '\n';
+        }
+        const auto print_image_stats = [&](const char* name, const std::uint8_t* source_bytes) {
+            // Analyse cached CPU memory rather than repeatedly scanning a mapped
+            // GPU allocation. This runs after completion, outside GPU timings.
+            std::vector<std::uint16_t> cached(output_size/sizeof(std::uint16_t));
+            std::memcpy(cached.data(),source_bytes,output_size);
+            const auto* bytes=reinterpret_cast<const std::uint8_t*>(cached.data());
             const auto hash = fnv1a64(bytes, output_size);
             const auto* halves = reinterpret_cast<const std::uint16_t*>(bytes);
             const std::size_t value_count = output_size / sizeof(std::uint16_t);
@@ -1386,6 +1548,7 @@ int main(int argc, char** argv) {
         for (auto& image : images) destroy_image(device, image);
         for (auto& buffer : buffers) destroy_buffer(device, buffer);
         if (command_pool) vkDestroyCommandPool(device, command_pool, nullptr);
+        if (benchmark_queries) vkDestroyQueryPool(device,benchmark_queries,nullptr);
         if (device) vkDestroyDevice(device, nullptr);
         if (instance) vkDestroyInstance(instance, nullptr);
         return 1;
@@ -1401,6 +1564,7 @@ int main(int argc, char** argv) {
     for (auto& image : images) destroy_image(device, image);
     for (auto& buffer : buffers) destroy_buffer(device, buffer);
     vkDestroyCommandPool(device, command_pool, nullptr);
+    if (benchmark_queries) vkDestroyQueryPool(device,benchmark_queries,nullptr);
     vkDestroyDevice(device, nullptr);
     vkDestroyInstance(instance, nullptr);
     return 0;

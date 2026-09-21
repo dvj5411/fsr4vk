@@ -14,6 +14,7 @@ std::vector<const char *> available_extensions;
 bool expose_synchronization2 = true;
 bool expose_mixed_dot = true;
 bool expose_float_controls2 = true;
+bool expose_memory_scope = true;
 
 void VKAPI_CALL query_features(VkPhysicalDevice,
                                VkPhysicalDeviceFeatures2 *features) {
@@ -30,8 +31,13 @@ void VKAPI_CALL query_features(VkPhysicalDevice,
       value->runtimeDescriptorArray =
           value->descriptorBindingVariableDescriptorCount = VK_TRUE;
       value->bufferDeviceAddress = VK_TRUE;
+      value->vulkanMemoryModelDeviceScope = expose_memory_scope;
       break;
     }
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES:
+      reinterpret_cast<VkPhysicalDeviceVulkanMemoryModelFeatures *>(node)
+          ->vulkanMemoryModelDeviceScope = expose_memory_scope;
+      break;
     case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES: {
       auto *value = reinterpret_cast<VkPhysicalDeviceVulkan13Features *>(node);
       value->synchronization2 = expose_synchronization2;
@@ -158,6 +164,134 @@ int main() {
       VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
       VK_KHR_SHADER_INTEGER_DOT_PRODUCT_EXTENSION_NAME,
   };
+  // Reproduce every sType from the RDR2 benchmark's post-OptiScaler chain.
+  for (bool native : {false, true}) {
+    expose_mixed_dot = native;
+    for (uint32_t api : {VK_API_VERSION_1_1, VK_API_VERSION_1_3}) {
+      for (bool enabled : {false, true}) {
+        VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR derivatives{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR};
+        VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptors{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT};
+        VkPhysicalDeviceSubgroupSizeControlFeatures subgroups{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES};
+        VkPhysicalDeviceSynchronization2Features sync{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES};
+        VkPhysicalDeviceVulkanMemoryModelFeatures memory{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES};
+        VkPhysicalDeviceBufferDeviceAddressFeatures bda{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES};
+        VkPhysicalDeviceDescriptorIndexingFeatures indexing{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES};
+        VkPhysicalDevice8BitStorageFeatures storage8{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES};
+        VkPhysicalDeviceShaderFloat16Int8Features float16{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES};
+        VkPhysicalDeviceUniformBufferStandardLayoutFeatures uniform{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFORM_BUFFER_STANDARD_LAYOUT_FEATURES};
+        VkDeviceMemoryOverallocationCreateInfoAMD overallocation{
+            VK_STRUCTURE_TYPE_DEVICE_MEMORY_OVERALLOCATION_CREATE_INFO_AMD};
+        VkPhysicalDeviceScalarBlockLayoutFeatures scalar{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SCALAR_BLOCK_LAYOUT_FEATURES};
+        VkPhysicalDeviceVulkan12Features v12{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};
+        memory.vulkanMemoryModel = v12.vulkanMemoryModel = enabled;
+        memory.vulkanMemoryModelAvailabilityVisibilityChains = VK_TRUE;
+        uniform.uniformBufferStandardLayout = scalar.scalarBlockLayout =
+            VK_TRUE;
+        const auto originalMemory = memory;
+        VkBaseOutStructure *nodes[] = {
+            reinterpret_cast<VkBaseOutStructure *>(&derivatives),
+            reinterpret_cast<VkBaseOutStructure *>(&descriptors),
+            reinterpret_cast<VkBaseOutStructure *>(&subgroups),
+            reinterpret_cast<VkBaseOutStructure *>(&sync),
+            reinterpret_cast<VkBaseOutStructure *>(&memory),
+            reinterpret_cast<VkBaseOutStructure *>(&bda),
+            reinterpret_cast<VkBaseOutStructure *>(&indexing),
+            reinterpret_cast<VkBaseOutStructure *>(&storage8),
+            reinterpret_cast<VkBaseOutStructure *>(&float16),
+            reinterpret_cast<VkBaseOutStructure *>(&uniform),
+            reinterpret_cast<VkBaseOutStructure *>(&overallocation),
+            reinterpret_cast<VkBaseOutStructure *>(&scalar)};
+        const int recordedTypes[] = {1000201000, 1000316002, 1000225002,
+                                     1000314007, 1000211000, 1000257000,
+                                     1000161001, 1000177000, 1000082000,
+                                     1000253000, 1000189000, 1000221000};
+        for (size_t i = 0; i < std::size(nodes); ++i)
+          require(nodes[i]->sType == recordedTypes[i],
+                  "fixture differs from benchmark chain");
+        for (size_t i = 0; i + 1 < std::size(nodes); ++i)
+          nodes[i]->pNext = nodes[i + 1];
+        VkDeviceCreateInfo rdr2{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+        rdr2.pNext = nodes[0];
+        const char *extensions[] = {VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME};
+        rdr2.enabledExtensionCount = 1;
+        rdr2.ppEnabledExtensionNames = extensions;
+        // Test the promoted memory-model path independently to avoid combining
+        // Vulkan12Features with its forbidden individual feature structures.
+        if (api == VK_API_VERSION_1_3) {
+          rdr2.pNext = &v12;
+          v12.pNext = &uniform;
+          uniform.pNext = &scalar;
+        }
+        for (bool supported : {false, true}) {
+          expose_memory_scope = supported;
+          bool rejected = false;
+          try {
+            fsr4vk::DeviceFeatures prepared(
+                reinterpret_cast<VkPhysicalDevice>(1), rdr2, api,
+                query_features, enumerate_extensions);
+            require(!enabled || supported, "unsupported device scope accepted");
+            const auto *out = prepared.get();
+            const auto *u = find_structure<
+                VkPhysicalDeviceUniformBufferStandardLayoutFeatures>(
+                out, uniform.sType);
+            const auto *s =
+                find_structure<VkPhysicalDeviceScalarBlockLayoutFeatures>(
+                    out, scalar.sType);
+            require(u && u != &uniform && u->uniformBufferStandardLayout,
+                    "uniform layout not preserved in owned copy");
+            require(s && s != &scalar && s->scalarBlockLayout,
+                    "scalar layout not preserved in owned copy");
+            if (api == VK_API_VERSION_1_1) {
+              for (auto *node : nodes)
+                require(has_structure(out, node->sType),
+                        "RDR2 feature node lost");
+              const auto *m =
+                  find_structure<VkPhysicalDeviceVulkanMemoryModelFeatures>(
+                      out, memory.sType);
+              require(m && m != &memory && m->vulkanMemoryModel == enabled &&
+                          m->vulkanMemoryModelDeviceScope == enabled &&
+                          m->vulkanMemoryModelAvailabilityVisibilityChains,
+                      "memory-model payload not preserved/completed");
+            } else {
+              const auto *m = find_structure<VkPhysicalDeviceVulkan12Features>(
+                  out, v12.sType);
+              require(m && m != &v12 && m->vulkanMemoryModel == enabled &&
+                          m->vulkanMemoryModelDeviceScope == enabled,
+                      "promoted memory-model device scope missing");
+            }
+          } catch (const std::runtime_error &e) {
+            require(enabled && !supported &&
+                        std::strstr(e.what(), "vulkanMemoryModelDeviceScope"),
+                    "unexpected RDR2 negotiation failure");
+            rejected = true;
+          }
+          require(rejected == (enabled && !supported),
+                  "device-scope gate mismatch");
+          require(memory.vulkanMemoryModel ==
+                          originalMemory.vulkanMemoryModel &&
+                      !memory.vulkanMemoryModelDeviceScope &&
+                      !v12.vulkanMemoryModelDeviceScope,
+                  "caller memory-model fields modified");
+          require(uniform.uniformBufferStandardLayout &&
+                      scalar.scalarBlockLayout,
+                  "caller layout fields modified");
+        }
+      }
+    }
+  }
+  expose_memory_scope = expose_mixed_dot = true;
   const char *existing_extension = "VK_KHR_swapchain";
   VkDeviceCreateInfo source{};
   source.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

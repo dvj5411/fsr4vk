@@ -1,5 +1,52 @@
 # Source provenance
 
+## Current release: v0.4
+
+Production provider code is synced from private `fsr4-vulkan-translation`
+commit `7824864` (FSR 4.1.1 integration, dual compressed/debug builds, and
+the RDR2 external-exposure history fix). Private captures, research tools and
+compile-time research-capture hooks are excluded. The public build defaults
+to embedding its checked-in assets. The historical notes below describe older
+releases and do not identify the current binaries.
+
+4.1.1 INT8 shaders and initializers are translated from the supplied official
+FFX 2.3 SDK DLL with SHA-256
+`d0dcccc74a43c44ba435b7a369b456e0970d8a4464e4bd683119b374f2c9fb46`.
+The `assets/fsr411/` manifests retain capture identities and payload hashes.
+The existing 4.0.2 shader/model payloads are unchanged.
+
+The bundled OptiScaler.dll is the repository's Windows Release build from
+source commit `59ac04da5bd54bc8ddd84a56059a0a6283c7c198`, pinned by the public
+submodule. Build run: https://github.com/dvj5411/OptiScaler/actions/runs/35549757414
+(artifact 10617639643). Its SHA-256 is
+`59859ac4ff2284c49ad98cf162325e28da542224007566d27f4069a1c8e91668`.
+It is byte-identical to the OptiScaler.asi used for the successful W6400 RDR2
+test. Neither the earlier PR-author binary nor the fallback DLL is included.
+
+Public-source provider builds:
+
+- Normal: `d8f32376b4cefde8172b41208dc102c61f9e1ec4861f3d6d660d2ba8596bee3c`.
+  Lossless Zstandard resources, dead-section removal and stripped symbols.
+- Debug: `294651576ae89769257efc4d4290252eef2b6d5edb097698863fce9867bdf0cb`.
+  Raw resources, compiler debug information, no section cleanup or stripping.
+
+Both retain all 948 logical assets (553 unique resources); the embedded payloads
+were decoded and checked against their manifests. The Zstandard 1.5.7 decoder
+is statically linked only into the normal provider; its BSD notice is included.
+
+The user confirmed the prior equivalent uncompressed fix resolves RDR2's
+4.1.1 visual corruption, and reported no visual problems in BG3 or NMS.
+Those gameplay tests are distinct from final public-build synthetic validation.
+Both final public DLLs passed the 11-case W6400 exposure/regression suite:
+eight 4.1.1 external-exposure cases matched the original DLL byte-for-byte;
+4.1.1 automatic exposure and 4.0.2 automatic/external exposure matched the
+previous provider byte-for-byte. No Vulkan validation errors were reported.
+CPU decoder corruption/bounds checks, deterministic embedding, 12 captured
+dispatch plans, device negotiation, memory-allocation fallback, preset reporting
+and ZIP packaging checks also passed. No new native-Windows GPU test is claimed.
+
+## Historical releases
+
 The provider source and build inputs were assembled from the private research
 repository `dvj5411/fsr4-vulkan-translation` at commit
 `0ef895f3421427c3dd63dd465d3cb0a46489d9da` (production initializer locality for

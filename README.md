@@ -1,7 +1,7 @@
 # fsr4vk
 
 `fsr4vk` is an experimental native Vulkan FFX upscaler provider for the
-FSR 4.0.2c INT8 model, together with the OptiScaler integration used to load it.
+FSR 4.1.1 and FSR 4.0.2 INT8 models, together with the OptiScaler integration used to load them.
 It is an independent research project and is not an AMD product or an official
 OptiScaler release.
 
@@ -25,12 +25,13 @@ The provider build currently uses a Unix-like host with:
 
 - Python 3;
 - MinGW-w64 (`x86_64-w64-mingw32-g++` and `windres`);
+- the Zstandard CLI (tested with 1.5.7);
 - a Vulkan SDK containing `include/vulkan`; and
 - a Windows Vulkan import library (`vulkan-1`) visible to the linker.
 
 Building the custom `OptiScaler.dll` requires Windows, Visual Studio 2022, and
-the OptiScaler submodule's recursive dependencies. Releases include this custom
-build as `OptiScaler_fallback.dll` for Doom TDA and preset selection.
+the OptiScaler submodule's recursive dependencies. Release v0.4 includes the
+repo-built `OptiScaler.dll` with the RDR2 fixes; no fallback DLL is bundled.
 
 ## Clone
 
@@ -56,16 +57,17 @@ export FSR4_VULKAN_IMPORT_LIBRARY=/path/to/libvulkan-1.a
 ./tools/build-vulkan-provider-windows.sh
 ```
 
-The script verifies all twelve original and portable shader/model bundles, embeds them, and
-writes the self-contained provider:
+The script verifies both versions' shader/model bundles and builds two
+self-contained providers:
 
 ```text
 build/provider-windows/amd_fidelityfx_upscaler_vk.dll
+build/provider-windows/amd_fidelityfx_upscaler_vk_debug.dll
 ```
 
 Set `FSR4_PROVIDER_OUTPUT_DIR` to change the output directory or
 `FSR4_EMBED_ASSETS` to build with another verified `assets/general` tree and
-its sibling `assets/portable` and `assets/colors` trees. The portable INT8 backend is selected
+its sibling `assets/portable`, `assets/colors`, and `assets/fsr411` trees. The portable INT8 backend is selected
 automatically when the VALVE mixed-dot feature is unavailable. Initial NVIDIA
 validation covers the RTX 3070 Ti through Proton, not native Windows NVIDIA.
 
@@ -121,20 +123,21 @@ optiscaler/x64/Release/a/OptiScaler.dll
 
 ## Install
 
-Start with an existing working OptiScaler 10.0 nightly installation.
+Follow the installation steps in [readme.txt](readme.txt), also included verbatim
+in the ZIP. Select **FSR 3.X** in the Upscalers tab; the FFX provider selector
+offers **FSR 4.1.1 VK INT8** and **FSR 4.0.2 VK INT8**.
 
-1. Close the game and back up its existing DLLs.
-2. Extract all ZIP contents into the root of the game files containing that
-   OptiScaler installation. The provider is placed in `OptiScaler/` automatically.
-3. If you need the fallback, rename `OptiScaler_fallback.dll` to your existing
-   OptiScaler filename and replace it. For an ASI installation, use `OptiScaler.asi`
-   and retain the working loader and overrides. Do not load both forms simultaneously.
-4. Remove `FSR4_VK_ENABLE_DEVICE_FEATURES=1` from the launch arguments if it was
-   added for an older build. It is redundant and is not read by the current
-   provider. The host must enable the required features before device creation.
-5. Select the FSR 3.X/FFX backend and then the FSR 4.0.2c Vulkan provider.
+The normal DLL uses lossless embedded-asset compression and stripped symbols.
+The debug DLL retains raw assets and compiler debug information, without
+section cleanup. To test it, close the game, back up the normal DLL, and copy
+`OptiScaler/amd_fidelityfx_upscaler_vk_debug.dll` over
+`OptiScaler/amd_fidelityfx_upscaler_vk.dll`. Restore the normal DLL to switch back.
+No extra model files or Zstandard runtime DLL are needed.
 
-There is currently a known regression in Doom TDA and preset selector when using the up-to-date OptiScaler. If you need these features, use the fallback .dll instead.
+v0.4 also fixes previous-frame external exposure for 4.1.1. The user confirmed
+that the RDR2 flickering/artifacts disappeared; BG3 and NMS visual tests passed.
+The earlier suspected compression performance regression was not established
+as repeatable. These observations do not guarantee every GPU/game combination.
 
 The current experimental path requires Vulkan 1.1 or newer and the provider's
 required Vulkan device features. The validated hardware baseline is an RDNA2

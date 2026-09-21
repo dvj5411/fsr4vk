@@ -1,5 +1,6 @@
 #pragma once
 #include "quality-recorder.hpp"
+#include "fsr411-recorder.hpp"
 #include "embedded-assets.hpp"
 #include "vulkan-compat.hpp"
 #include "external-exposure-spv.hpp"
@@ -249,6 +250,8 @@ class QualityContext {
     std::vector<Buffer> buffers;
     std::vector<Image> images;
     std::vector<uint8_t> weights;
+    bool fsr411 = false;
+    uint32_t model_capacity_width = 1920, model_capacity_height = 1080;
     bool initialized = false;
     bool nms_inputs = false;
     bool external_exposure = false;
@@ -271,14 +274,14 @@ class QualityContext {
             // Caller has completed GPU work before destruction. Read only the
             // final frame; repeated resets are ordered on the context's queue.
             try {
-                std::array<uint64_t,30> values{};
-                const uint32_t count=nms_inputs ? 30 : 28;
+                std::array<uint64_t,56> values{};
+                const uint32_t count=fsr411 ? 56 : nms_inputs ? 30 : 28;
                 if (initialized && vkGetQueryPoolResults(device,profile_queries,0,count,sizeof(values),
                     values.data(),sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS) {
                     std::ofstream out(profile_path);
                     out << "pass,gpu_ms\n";
                     for (uint32_t i=0;i<count/2;++i) {
-                        const char* name=nms_inputs && i==0 ? "auto_exposure" : kPasses[i-(nms_inputs ? 1 : 0)].name;
+                        const char* name=nms_inputs && i==0 ? "auto_exposure" : fsr411 ? fsr4::k411PassNames[i-1] : kPasses[i-(nms_inputs ? 1 : 0)].name;
                         out << name << ',' << double(values[i*2+1]-values[i*2])*timestamp_period/1e6 << '\n';
                     }
                 }
@@ -309,11 +312,11 @@ public:
         auto& pair=color_pipelines[static_cast<unsigned>(color)];
         for (unsigned i=0;i<2;++i) {
             if(pair[i]) continue;
-            const auto file=std::string(i==0 ? "pass-01" : "pass-14")+
-                (native_mixed_dot ? ".spv" : ".portable.spv");
+            const auto file=std::string(i==0 ? "pass-01" : fsr411 ? "pass-27" : "pass-14")+
+                (fsr411 || native_mixed_dot ? ".spv" : ".portable.spv");
             pair[i]=create_pipeline(read_spirv(color_shader_dir/name/file),name);
         }
-        pipelines[0]=pair[0]; pipelines[13]=pair[1];
+        pipelines[0]=pair[0]; pipelines[fsr411 ? 26 : 13]=pair[1];
         active_color=color;
         return true; // Caller must reset temporal history on the transition.
     }
@@ -351,18 +354,21 @@ public:
                    uint32_t max_output_width,
                    uint32_t max_output_height,
                    uint32_t api_version,
-                   bool external_exposure_input = false)
+                   bool external_exposure_input = false, bool use_fsr411 = false)
         : physical_device(physical), device(logical),
           get_device_proc_addr(get_device_proc_addr),
           dispatch(logical, get_device_proc_addr, api_version), nms_inputs(nms),
           external_exposure(external_exposure_input) {
+        fsr411=use_fsr411;
+        if(fsr411 && !nms) throw std::invalid_argument("4.1.1 requires the general layout");
+        if(max_output_width>1920 || max_output_height>1080) { model_capacity_width=3840;model_capacity_height=2160; }
       try {
         color_shader_dir=shader_dir.parent_path().parent_path().parent_path()/"colors"/
                          shader_dir.parent_path().filename()/shader_dir.filename();
         fsr4vk::validate_descriptor_commands(device,get_device_proc_addr);
         if(external_exposure && !nms_inputs)
             throw std::invalid_argument("external exposure adapter requires general model layout");
-        native_mixed_dot = fsr4vk::supportsNativeMixedDot(
+        native_mixed_dot = !fsr411 && fsr4vk::supportsNativeMixedDot(
             physical, vkGetPhysicalDeviceFeatures2, vkEnumerateDeviceExtensionProperties);
         if (const char* path=std::getenv("FSR4_VK_PROFILE_PATH")) {
             VkPhysicalDeviceProperties properties{};
@@ -372,7 +378,7 @@ public:
             timestamp_period=properties.limits.timestampPeriod;
             profile_path=path;
             VkQueryPoolCreateInfo query{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
-            query.queryType=VK_QUERY_TYPE_TIMESTAMP; query.queryCount=30;
+            query.queryType=VK_QUERY_TYPE_TIMESTAMP; query.queryCount=fsr411 ? 56 : 30;
             check(vkCreateQueryPool(device,&query,nullptr,&profile_queries),"profile query pool");
         }
         VkSamplerCreateInfo sampler_info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
@@ -485,30 +491,26 @@ public:
                                      &pipeline_layout),
               "vkCreatePipelineLayout");
 
-        modules.reserve(kPasses.size());
-        pipelines.reserve(kPasses.size());
-        std::vector<fsr4::Pass> selected_passes(kPasses.begin(), kPasses.end());
-        if (nms_inputs) {
-            // Descriptor table and constants below follow the captured SPD root
-            // layout. Mip scratch allocation matches the provider's ceil(size/16).
-            selected_passes[0].hash = "c853540cef1e8d64";
-            selected_passes.push_back({"auto_exposure", "996136f00380aba8", 20, 12, {90,93}, 2});
-        }
+        const auto model_pass_count=fsr411 ? 27u : unsigned(kPasses.size());
+        const auto pipeline_count=model_pass_count+(nms_inputs ? 1u : 0u);
+        modules.reserve(pipeline_count);
+        pipelines.reserve(pipeline_count);
         const bool general_bundle=fsr4assets::is_embedded(shader_dir) || fs::exists(shader_dir/"pass-00.spv");
-        for (const auto& pass : selected_passes) {
-            const auto index=unsigned(&pass-selected_passes.data());
-            const auto canonical=index==14 ? 0u : index+1;
+        for (unsigned index=0;index<pipeline_count;++index) {
+            const bool spd=index==model_pass_count;
+            const auto canonical=spd ? 0u : index+1;
+            const char* hash=spd ? "996136f00380aba8" : nms_inputs && index==0 ? "c853540cef1e8d64" :
+                             fsr411 ? "" : kPasses[index].hash;
             auto name=general_bundle ? "pass-"+std::string(canonical<10 ? "0" : "")+std::to_string(canonical)+".spv"
-                                           : std::string(pass.hash)+".spv";
-            if (!native_mixed_dot)
-                name.insert(name.size() - 4, ".portable");
-            auto code = external_exposure && index==14
+                                     : std::string(hash)+".spv";
+            if (!fsr411 && !native_mixed_dot) name.insert(name.size()-4,".portable");
+            auto code=external_exposure && spd
                 ? std::vector<std::uint32_t>(std::begin(kExternalExposureSpv),std::end(kExternalExposureSpv))
-                : read_spirv(shader_dir / name);
-            if(index==11) fsr4::guard_model11_rows(code);
-            pipelines.push_back(create_pipeline(code,pass.name));
+                : read_spirv(shader_dir/name);
+            if(!fsr411 && index==11) fsr4::guard_model11_rows(code);
+            pipelines.push_back(create_pipeline(code,spd ? "auto_exposure" : fsr411 ? "fsr411" : kPasses[index].name));
         }
-        color_pipelines[0]={pipelines[0],pipelines[13]};
+        color_pipelines[0]={pipelines[0],pipelines[fsr411 ? 26 : 13]};
 
 
         auto get_layout_size = reinterpret_cast<PFN_vkGetDescriptorSetLayoutSizeEXT>(
@@ -594,7 +596,7 @@ public:
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
         Buffer& initializer = buffers.back();
         std::memcpy(initializer.mapped, initializer_bytes.data(), initializer_bytes.size());
-        const auto weights_bytes = read_bytes(weights_path);
+        const auto weights_bytes = fsr411 ? std::vector<uint8_t>(1024) : read_bytes(weights_path);
         if (weights_bytes.size() != 1024) throw std::runtime_error("weights must be 1024 bytes");
         buffers.push_back(create_buffer(
             physical_device, device, kPhysicalConstantBackingSize,
@@ -623,7 +625,9 @@ public:
         images.reserve(3);
         for (auto format : {VK_FORMAT_R16G16B16A16_SFLOAT,
                             VK_FORMAT_R16G16B16A16_SFLOAT,VK_FORMAT_R8G8B8A8_UNORM})
-            images.push_back(create_image(physical_device,device,fsr4::round_up(max_output_width,8),fsr4::round_up(max_output_height,8),format,
+            images.push_back(create_image(physical_device,device,
+                fsr411 ? max_output_width : fsr4::round_up(max_output_width,8),
+                fsr411 ? max_output_height : fsr4::round_up(max_output_height,8),format,
                 VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT));
         if (nms_inputs) {
             const auto usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
@@ -784,6 +788,10 @@ public:
                                           external_exposure ? supplied_exposure.view : color.view);
         }
 
+        if(fsr411) {
+            write_buffer_descriptor_buffer(11,scratch);
+            write_buffer_descriptor_buffer(30,initializer);
+        } else {
         for (const auto index : {
                  11u, 20u, 22u, 24u, 26u, 28u, 30u,
                  34u, 38u, 42u, 46u, 48u, 50u, 62u}) {
@@ -791,6 +799,7 @@ public:
         }
         for (const auto index : {32u, 36u, 40u, 44u}) {
             write_buffer_descriptor_buffer(index, initializer);
+        }
         }
         write_buffer_descriptor_buffer(62, scratch);  // post u11
 
@@ -809,7 +818,14 @@ public:
             static_assert(sizeof(spd)==32);
             std::memcpy(static_cast<uint8_t*>(frame.constants.mapped)+512,&spd,sizeof(spd));
         }
-        std::memcpy(static_cast<uint8_t*>(frame.constants.mapped)+1024,weights.data(),weights.size());
+        if(fsr411) {
+            std::array<std::array<uint32_t,4>,17> tensors{};
+            for(size_t i=0;i<tensors.size();++i) {
+                tensors[i][0]=fsr4::round_up(main_constants.width,8)/fsr4::k411TensorDivisors[i];
+                tensors[i][1]=fsr4::round_up(main_constants.height,8)/fsr4::k411TensorDivisors[i];
+            }
+            std::memcpy(static_cast<uint8_t*>(frame.constants.mapped)+1024,tensors.data(),sizeof(tensors));
+        } else std::memcpy(static_cast<uint8_t*>(frame.constants.mapped)+1024,weights.data(),weights.size());
         const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
         if (!initialized) {
             VkClearColorValue zero{};
@@ -867,11 +883,12 @@ public:
             const uint32_t indices[]{0,1,2}; const VkDeviceSize offsets[]{0,0,0};
             set_descriptor_offsets(command_buffer,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline_layout,0,3,indices,offsets);
             const auto address=device_address(dispatch.get_buffer_device_address,device,frame.constants.buffer)+512;
-            const uint32_t push[]{uint32_t(address),uint32_t(address>>32),90,93};
+            const uint32_t push[]{external_exposure ? uint32_t(main_constants.reset!=0) : uint32_t(address),
+                                  uint32_t(address>>32),90,93};
             vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_COMPUTE,pipelines.back());
             vkCmdPushConstants(command_buffer,pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
             if (profile_queries) {
-                vkCmdResetQueryPool(command_buffer,profile_queries,0,30);
+                vkCmdResetQueryPool(command_buffer,profile_queries,0,fsr411 ? 56 : 30);
                 dispatch.cmd_write_timestamp2(command_buffer,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,profile_queries,0);
             }
             vkCmdDispatch(command_buffer,external_exposure ? 1 : (main_constants.width_lr+63)/64,
@@ -882,8 +899,13 @@ public:
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                 VK_ACCESS_2_SHADER_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_READ_BIT);
         }
-        if (profile_queries && !nms_inputs) vkCmdResetQueryPool(command_buffer,profile_queries,0,30);
-        fsr4::record_quality_frame(command_buffer,pipeline_layout,std::span<const VkPipeline>(pipelines).first(kPasses.size()),addresses,
+        if (profile_queries && !nms_inputs) vkCmdResetQueryPool(command_buffer,profile_queries,0,fsr411 ? 56 : 30);
+        if(fsr411) fsr4::record_fsr411_frame(command_buffer,pipeline_layout,std::span<const VkPipeline>(pipelines).first(27),addresses,
+            device_address(dispatch.get_buffer_device_address,device,frame.constants.buffer),history.image,recurrent.image,reprojected.image,
+            bind_descriptor_buffers,set_descriptor_offsets,bind_embedded_samplers,profile_queries,2,
+            main_constants.width,main_constants.height,model_capacity_width,model_capacity_height,
+            dispatch.cmd_pipeline_barrier2,dispatch.cmd_write_timestamp2);
+        else fsr4::record_quality_frame(command_buffer,pipeline_layout,std::span<const VkPipeline>(pipelines).first(kPasses.size()),addresses,
             device_address(dispatch.get_buffer_device_address,device,frame.constants.buffer),history.image,recurrent.image,reprojected.image,
             bind_descriptor_buffers,set_descriptor_offsets,bind_embedded_samplers,profile_queries,nms_inputs ? 2 : 0,
             main_constants.width,main_constants.height,dispatch.cmd_pipeline_barrier2,

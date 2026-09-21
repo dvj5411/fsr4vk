@@ -1,0 +1,318 @@
+{
+  "schema": 1,
+  "version": "4.1.1",
+  "arithmetic": "int8",
+  "provenance": {
+    "dll_sha256": "d0dcccc74a43c44ba435b7a369b456e0970d8a4464e4bd683119b374f2c9fb46",
+    "probe_sha256": "5e9dd59011ca1fc76afbd20ea7ca3553bc121c055718061aef4b8e6585265f28",
+    "vkd3d_sha256": "68b8bc7b32f9b1b1b0526e9e2e769731dd8da9af0f2b40f76012385b9d5721df",
+    "backend": "portable",
+    "preset": "performance",
+    "capacity": [
+      1920,
+      1080
+    ],
+    "render": [
+      960,
+      540
+    ],
+    "color": "nonlinear",
+    "environment": {
+      "VKD3D_CONFIG": "force_raw_va_cbv",
+      "VKD3D_SHADER_CACHE_PATH": "0",
+      "VKD3D_SHADER_DUMP_PATH": "/home/admin/fsr411-20260921/captures/official-1080-performance-nonlinear/shaders",
+      "VK_LOADER_LAYERS_DISABLE": "~implicit~",
+      "VK_DRIVER_FILES": "/usr/share/vulkan/icd.d/radeon_icd.x86_64.json",
+      "VK_LAYER_PATH": "/home/admin/fsr4-vulkan-translation/.runtime/vulkan-sdk/1.4.357.1/x86_64/share/vulkan/explicit_layer.d",
+      "VK_INSTANCE_LAYERS": "VK_LAYER_LUNARG_gfxreconstruct",
+      "GFXRECON_CAPTURE_PROCESS_NAME": "X:\\fsr411-20260921\\build\\fsr4-provider-probe.exe",
+      "GFXRECON_CAPTURE_FILE": "/home/admin/fsr411-20260921/captures/official-1080-performance-nonlinear/trace.gfxr",
+      "GFXRECON_CAPTURE_FILE_TIMESTAMP": "false",
+      "GFXRECON_MEMORY_TRACKING_MODE": "unassisted",
+      "VKD3D_DISABLE_EXTENSIONS": "VK_NV_raw_access_chains,VK_VALVE_shader_mixed_float_dot_product,VK_KHR_shader_float_controls2"
+    }
+  },
+  "shaders": [
+    {
+      "file": "pass-00.spv",
+      "sha256": "d6a01100a56327713d2f7c1a768e41f8a31f2cadce5f37b7dac81630722ff5a2",
+      "dxil": "996136f00380aba8",
+      "groups": [
+        15,
+        9,
+        1
+      ]
+    },
+    {
+      "file": "pass-01.spv",
+      "sha256": "134c81047e72185aa27c6b06e13d7b5991b80b99404225a6e6ea0013933a6e3f",
+      "dxil": "76ae3eb23d267a90",
+      "groups": [
+        120,
+        68,
+        1
+      ]
+    },
+    {
+      "file": "pass-02.spv",
+      "sha256": "bdabc7c28f18c31ac8574856a386a268ae4d866f68a65e72b59bf3bad2235132",
+      "dxil": "2926b128258f6507",
+      "groups": [
+        94,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-03.spv",
+      "sha256": "bcb4d1d01e33114c68bb13059577c280bb05b5a3af7218fdbc38e99883e0632d",
+      "dxil": "e0d8ce49e87ed7c3",
+      "groups": [
+        15,
+        540,
+        1
+      ]
+    },
+    {
+      "file": "pass-04.spv",
+      "sha256": "d85b605d066d89178994ba835b6c3b267ed771de530117a5b9e6103d49e866e7",
+      "dxil": "46d63cc2724ab56d",
+      "groups": [
+        94,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-05.spv",
+      "sha256": "e44f0ccd272e4a85ad38894a38db7adae019d18660b166e6c28e82b328d7cc84",
+      "dxil": "e7c288d8ff89d888",
+      "groups": [
+        15,
+        540,
+        1
+      ]
+    },
+    {
+      "file": "pass-06.spv",
+      "sha256": "df469b6481234bf7b964a7c0ecf8a5829d84d1bc34fdb7c72e87014f82e31326",
+      "dxil": "657a9149e6a6d983",
+      "groups": [
+        94,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-07.spv",
+      "sha256": "a873b766b2b8923aeb7d325a61cbea251cbac6450e708a23a7714c553ce577ff",
+      "dxil": "2b94cdfc6f11de60",
+      "groups": [
+        8,
+        270,
+        1
+      ]
+    },
+    {
+      "file": "pass-08.spv",
+      "sha256": "c4aba5b9cd11100308aa2e3d8a4d39e66713c46c35edbe6496552764459a2228",
+      "dxil": "c0806eb39b9c1e9f",
+      "groups": [
+        47,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-09.spv",
+      "sha256": "d757fd28efbd09259f82918de5d3765784933d5b26eea56babe45fd6fefc5cfa",
+      "dxil": "fdfc534367db7623",
+      "groups": [
+        8,
+        270,
+        1
+      ]
+    },
+    {
+      "file": "pass-10.spv",
+      "sha256": "295873b3ecbd9db40cc4c50ecf15a72964d5846b96642d2e4743a9333382b557",
+      "dxil": "589d8b78574384f8",
+      "groups": [
+        47,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-11.spv",
+      "sha256": "73e05c6727408d5b1f472112c5d68060e9db9aaf918e892055e6619d5f0e4edc",
+      "dxil": "f7ea511744202f66",
+      "groups": [
+        8,
+        270,
+        1
+      ]
+    },
+    {
+      "file": "pass-12.spv",
+      "sha256": "007315c42072370919ac393b63a04a0ac025a802f927b490a6749bd6034c15fd",
+      "dxil": "1d342f30b767818e",
+      "groups": [
+        47,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-13.spv",
+      "sha256": "020929f63d8a70f90bd628a92c50b4049db89155d5e062bf03eb1e8cb8ee7c60",
+      "dxil": "b6a81d50ce41c20f",
+      "groups": [
+        4,
+        135,
+        1
+      ]
+    },
+    {
+      "file": "pass-14.spv",
+      "sha256": "f26dc72bbe9ccc70e2cc2dc1f4b2a868baf3c2e470b4e76994f98c50674ec3d8",
+      "dxil": "b31e06cb230924d4",
+      "groups": [
+        24,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-15.spv",
+      "sha256": "9487c52cec7e259f4cb212335e84db43c52902b4e3243afcd34305b95ad1b83b",
+      "dxil": "83fc83db145b9eab",
+      "groups": [
+        4,
+        135,
+        1
+      ]
+    },
+    {
+      "file": "pass-16.spv",
+      "sha256": "55c48a8b7627343d996f7818ee6055e143d3b956b8f65911d6b6c337bd8f72ca",
+      "dxil": "9e5257bb73d56439",
+      "groups": [
+        24,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-17.spv",
+      "sha256": "810636645f52d5b8c019206deb046e954af730fc13edaa6a00ebf66e686c3ac0",
+      "dxil": "0cf0c70309ac947e",
+      "groups": [
+        4,
+        135,
+        1
+      ]
+    },
+    {
+      "file": "pass-18.spv",
+      "sha256": "a3d130ad8fc6438766f3cdeb7e062d03291a25f6a5e439f71b905795cfc856ec",
+      "dxil": "c6b076aa62c0927d",
+      "groups": [
+        24,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-19.spv",
+      "sha256": "e1b576f7e8cedc46615a90f5d2026a43a525a2e43cfc66b62def8e700f55688a",
+      "dxil": "fe94e2a85ab8086b",
+      "groups": [
+        4,
+        135,
+        1
+      ]
+    },
+    {
+      "file": "pass-20.spv",
+      "sha256": "70c2b7b4e55d665591b2dca3efddb6e99e6d393020722cec635fb8df3bd81bf1",
+      "dxil": "9b14984523169e4d",
+      "groups": [
+        47,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-21.spv",
+      "sha256": "bb1798794d6c8b0ad3760059bf36e2c396594226c0835202040a4a515a8beb01",
+      "dxil": "9c405b28b4266d13",
+      "groups": [
+        8,
+        270,
+        1
+      ]
+    },
+    {
+      "file": "pass-22.spv",
+      "sha256": "b0545fc4c1886fa0a6252029eb6e3a2f999974bc0bc89539c8d6005c184d8a6f",
+      "dxil": "6948fa9240fdd86d",
+      "groups": [
+        47,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-23.spv",
+      "sha256": "e9aee05cec78f0659fa570bfc0f495a51d00d2bc80c4e99cde4106a3df51c35e",
+      "dxil": "9f8f2d65fd1e19de",
+      "groups": [
+        8,
+        270,
+        1
+      ]
+    },
+    {
+      "file": "pass-24.spv",
+      "sha256": "1e93b681a9264afc07f0ab41086474b3afaa2ff8d37b5b75c9ceae005e21e558",
+      "dxil": "c33f4126d9878816",
+      "groups": [
+        94,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-25.spv",
+      "sha256": "6292dd68a4da9370c7dabb3b192fe6958b1a12daffd92b7fa80ed6fe231e1e5d",
+      "dxil": "c620021443a811fc",
+      "groups": [
+        15,
+        540,
+        1
+      ]
+    },
+    {
+      "file": "pass-26.spv",
+      "sha256": "abc2426ff739d25cba4d271cad08ec9f25056ae197a9727b7b7e72467ba49d28",
+      "dxil": "4d3bd506c02ee107",
+      "groups": [
+        94,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "pass-27.spv",
+      "sha256": "a729df477c9ff2a847ef90a390308d076db186d9908e3caa68d8e506fef61979",
+      "dxil": "dd1717c291b9e490",
+      "groups": [
+        60,
+        34,
+        1
+      ]
+    }
+  ],
+  "initializers_sha256": "a54e552ff69a3f7199861417f7ae461d1f67f636ab532c6ec9d8ea5d2963735a"
+}

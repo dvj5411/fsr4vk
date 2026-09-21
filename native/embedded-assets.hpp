@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include "asset-codec.hpp"
 #if defined(FSR4_EMBEDDED_ASSETS)
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -33,12 +34,12 @@ inline std::vector<std::uint8_t> read(const std::filesystem::path& path) {
                 reinterpret_cast<LPCWSTR>(&read), &module))
             throw std::runtime_error("cannot locate embedded asset module");
         const auto resource = FindResourceW(module, MAKEINTRESOURCEW(entry.id), MAKEINTRESOURCEW(10));
-        if (!resource || SizeofResource(module, resource) != entry.size)
+        if (!resource || SizeofResource(module, resource) != entry.stored_size)
             throw std::runtime_error("missing or incorrectly sized embedded asset: " + key);
         const auto loaded = LoadResource(module, resource);
         const auto bytes = static_cast<const std::uint8_t*>(LockResource(loaded));
         if (!bytes) throw std::runtime_error("cannot load embedded asset: " + key);
-        return {bytes, bytes + entry.size};
+        return decode(bytes,entry.stored_size,entry.size,entry.compressed);
     }
 #endif
     throw std::runtime_error("unknown embedded asset: " + path.generic_string());
