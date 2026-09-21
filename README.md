@@ -98,6 +98,13 @@ PR #1161 author's supplied OptiScaler binary, not a build of our older submodule
 Its exact corresponding source has not been supplied yet. See
 [RDR2 validation and limitations](provider/RDR2-COMPATIBILITY.md).
 
+Release 0.3.2.6 adds automatic device-local initializer placement with safe
+fallback. W6400 synthetic upscale-time reductions measured 4.35% at 1080p and
+7.09% at 1440p; these are not whole-game FPS guarantees. No new launch argument
+or OptiScaler change is needed. See [initializer locality](provider/INITIALIZER-LOCALITY.md).
+The archive includes both the PR-author `OptiScaler.dll` previously shipped in
+0.3.2.4 and the custom `OptiScaler_fallback.dll` from 0.3.2.5, unchanged.
+
 Release 0.3.2.5 adds generic non-linear, PQ, and sRGB color modes, the model-11
 row-bounds correctness fix, and game-local opt-in diagnostics. It restores the
 custom OptiScaler as `OptiScaler_fallback.dll` and places the provider in

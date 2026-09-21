@@ -2,9 +2,11 @@
 
 The provider source and build inputs were assembled from the private research
 repository `dvj5411/fsr4-vulkan-translation` at commit
-`ae0162216b85610bf2b37a14f3ec3075adb2e28e` (selected functional changes for 0.3.2.5).
+`0ef895f3421427c3dd63dd465d3cb0a46489d9da` (production initializer locality for
+0.3.2.6, on top of the selected functional changes for 0.3.2.5).
 Research capture hooks, throughput experiments, memory-placement experiments,
-and optimization tooling/evidence are excluded. Base shader/model payloads
+and private optimization tooling/evidence are excluded; the validated production
+initializer allocation policy and its CPU tests are included. Base shader/model payloads
 are unchanged; color overlays and the runtime row-bounds guard are included.
 
 This integrates the Deck fix (`f956eb0`) and the public NVIDIA development
@@ -67,3 +69,26 @@ GPU evidence, numerical exceptions, and hardware-validation limits.
 
 0.3.2.5 provider SHA-256:
 `39733a9f6b4d3e99485eb8de570e779e02112d794afdbe9f5a7d870ca27e0da2`.
+
+## Release 0.3.2.6
+
+Adds automatic device-local initializer preference and safe allocation/mapping
+fallback. See `provider/INITIALIZER-LOCALITY.md` for validation and measured scope.
+The normal capability-selected provider is used, not the forced-portable test DLL.
+Shader/model assets and the packaged `readme.txt` remain unchanged from 0.3.2.5.
+
+Both OptiScaler binaries are bundled unchanged:
+
+- `OptiScaler.dll`: the PR-author binary previously shipped in 0.3.2.4,
+  SHA-256 `96b9fcf18bbeea3a14d970cafceb00efb91670b374fd1a05b86c74d20299af2a`.
+  The corresponding-source limitation stated above still applies.
+- `OptiScaler_fallback.dll`: the custom fallback from 0.3.2.5,
+  SHA-256 `0547cf39a65d9eff108ff3efb519d53cf07d186387cefb7de68fe01c62dd9fb6`.
+  Corresponding source remains the pinned OptiScaler submodule.
+
+Provider SHA-256:
+`0693a041de57d81dd491a6a4a580ab278c3afbc81f7be3a206247206fc2fe85c`.
+This public-source rebuild matches every runtime PE section of the NMS-tested
+private DLL after normalizing image-base relocations and the export timestamp;
+embedded asset manifests are identical. Private tested DLL SHA-256:
+`b9e4f6ce1485ba100c4efb5a6d8095213683dac7191dfb6ea0a26aafeca29ad5`.

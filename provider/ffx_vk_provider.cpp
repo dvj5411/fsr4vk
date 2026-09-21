@@ -579,6 +579,14 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                 (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0);
             core=created.get();
             provider->cores[selected_preset]=std::move(created);
+            if(!provider->diagnostic_path.empty()) {
+                const auto& allocation=core->initializer_allocation();
+                diagnostic(*provider,"initializer_memory bytes="+std::to_string(allocation.size)+
+                    " type="+std::to_string(allocation.memory_type_index)+
+                    " flags="+std::to_string(allocation.memory_properties)+
+                    " device_local="+std::to_string(bool(allocation.memory_properties & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT))+
+                    " fallback="+std::to_string(allocation.preferred_memory_fallback));
+            }
             diagnostic(*provider,"model ready="+selected_preset+" cpu_build_ms="+
                 std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::steady_clock::now()-build_started).count()));

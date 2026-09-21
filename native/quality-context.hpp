@@ -4,6 +4,7 @@
 #include "vulkan-compat.hpp"
 #include "external-exposure-spv.hpp"
 #include "color-space.hpp"
+#include "buffer-memory-policy.hpp"
 #include "model11-row-bounds.hpp"
 #include "../provider/vulkan_device_features.hpp"
 #include <algorithm>
@@ -25,6 +26,9 @@ struct Buffer {
     VkDeviceMemory memory = VK_NULL_HANDLE;
     VkDeviceSize size = 0;
     void* mapped = nullptr;
+    uint32_t memory_type_index = 0;
+    VkMemoryPropertyFlags memory_properties = 0;
+    bool preferred_memory_fallback = false;
 };
 
 struct Image {
@@ -110,7 +114,8 @@ inline Buffer create_buffer(VkPhysicalDevice physical_device,
                      VkDeviceSize size,
                      VkBufferUsageFlags usage,
                      VkMemoryPropertyFlags properties,
-                     bool device_address = false) {
+                     bool device_address = false,
+                     VkMemoryPropertyFlags preferred_properties = 0) {
     Buffer result{};
     result.size = size;
     try {
@@ -127,14 +132,22 @@ inline Buffer create_buffer(VkPhysicalDevice physical_device,
     VkMemoryAllocateInfo allocation{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
     allocation.pNext = device_address ? &flags_info : nullptr;
     allocation.allocationSize = requirements.size;
-    allocation.memoryTypeIndex = memory_type(physical_device, requirements.memoryTypeBits,
-                                             properties);
-    check(vkAllocateMemory(device, &allocation, nullptr, &result.memory),
-          "vkAllocateMemory(buffer)");
+    VkPhysicalDeviceMemoryProperties available{};
+    vkGetPhysicalDeviceMemoryProperties(physical_device,&available);
+    const auto choice=choose_buffer_memory(available,requirements.memoryTypeBits,
+                                           properties,preferred_properties);
+    const auto outcome=allocate_buffer_memory(allocation,choice,
+        (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)!=0,size,result.memory,result.mapped,
+        [&](const VkMemoryAllocateInfo& info,VkDeviceMemory& memory) {
+            return vkAllocateMemory(device,&info,nullptr,&memory);
+        },[&](VkDeviceMemory memory,VkDeviceSize bytes,void*& mapped) {
+            return vkMapMemory(device,memory,0,bytes,0,&mapped);
+        },[&](VkDeviceMemory memory) {vkFreeMemory(device,memory,nullptr);});
+    check(outcome.result,"allocate/map buffer memory");
+    result.memory_type_index=outcome.type;
+    result.memory_properties=available.memoryTypes[outcome.type].propertyFlags;
+    result.preferred_memory_fallback=outcome.fallback;
     check(vkBindBufferMemory(device, result.buffer, result.memory, 0), "vkBindBufferMemory");
-    if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-        check(vkMapMemory(device, result.memory, 0, size, 0, &result.mapped), "vkMapMemory");
-    }
     return result;
     } catch (...) {
         if (result.mapped) vkUnmapMemory(device,result.memory);
@@ -323,6 +336,7 @@ private:
         return pipeline;
     }
 public:
+    const Buffer& initializer_allocation() const { return buffers.at(4); }
     const char* shader_backend() const {
         return native_mixed_dot ? "native-mixed-dot" : "portable-int8";
     }
@@ -576,7 +590,8 @@ public:
         buffers.push_back(create_buffer(
             physical_device, device, initializer_bytes.size(),
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, true));
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, true,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
         Buffer& initializer = buffers.back();
         std::memcpy(initializer.mapped, initializer_bytes.data(), initializer_bytes.size());
         const auto weights_bytes = read_bytes(weights_path);

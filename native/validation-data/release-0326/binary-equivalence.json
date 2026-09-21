@@ -1,0 +1,18 @@
+{
+  "reference_sha256": "b9e4f6ce1485ba100c4efb5a6d8095213683dac7191dfb6ea0a26aafeca29ad5",
+  "release_sha256": "0693a041de57d81dd491a6a4a580ab278c3afbc81f7be3a206247206fc2fe85c",
+  "normalized_runtime_sections_identical": {
+    ".text": true,
+    ".data": true,
+    ".rdata": true,
+    ".pdata": true,
+    ".xdata": true,
+    ".bss": true,
+    ".edata": true,
+    ".idata": true,
+    ".tls": true,
+    ".rsrc": true,
+    ".reloc": true
+  },
+  "embedded_manifests_identical": true
+}
