@@ -422,6 +422,8 @@ int main(int argc, char** argv) {
     const bool use_provider = nms_inputs || (argc == 6 && std::string(argv[5]) == "--provider");
     const bool use_context = use_provider || (argc == 6 && std::string(argv[5]) == "--context");
     const bool external_exposure_test = std::getenv("FSR4_TEST_EXTERNAL_EXPOSURE") != nullptr;
+    const bool half_exposure_test = std::getenv("FSR4_TEST_R16_EXPOSURE") != nullptr;
+    if(half_exposure_test && !external_exposure_test)return 2;
     const auto test_float=[](const char* name,float fallback) {
         if(const char* value=std::getenv(name)) {
             char* end=nullptr; const float parsed=std::strtof(value,&end);
@@ -854,8 +856,13 @@ int main(int argc, char** argv) {
         std::memcpy(staging_bytes, color_data, color_size);
         std::memcpy(staging_bytes + color_size, frame.depth.data(), depth_size);
         std::memcpy(staging_bytes + color_size + depth_size, frame.motion.data(), motion_size);
-        const float exposure = first_exposure;
-        std::memcpy(staging_bytes + exposure_offset, &exposure, sizeof(exposure));
+        const auto upload_exposure = [&](float exposure) {
+            if(half_exposure_test) {
+                const auto half=float_to_half(exposure);
+                std::memcpy(staging_bytes+exposure_offset,&half,sizeof(half));
+            } else std::memcpy(staging_bytes+exposure_offset,&exposure,sizeof(exposure));
+        };
+        upload_exposure(first_exposure);
         const VkDeviceSize output_size =
             static_cast<VkDeviceSize>(kOutputWidth) * kOutputHeight * 8;
         buffers.push_back(create_buffer(
@@ -880,7 +887,7 @@ int main(int argc, char** argv) {
                                       VK_FORMAT_R16G16_SFLOAT,
                                       VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT));
         Image& motion = images.back();
-        images.push_back(create_image(physical_device, device, 1, 1, VK_FORMAT_R32_SFLOAT,
+        images.push_back(create_image(physical_device, device, 1, 1, half_exposure_test ? VK_FORMAT_R16_SFLOAT : VK_FORMAT_R32_SFLOAT,
                                       VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT));
         Image& exposure_image = images.back();
         const VkImageUsageFlags internal_usage = VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -1169,7 +1176,7 @@ int main(int argc, char** argv) {
             d.color=resource(color,FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
             d.depth=resource(depth,FFX_API_SURFACE_FORMAT_R32_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
             d.motionVectors=resource(motion,FFX_API_SURFACE_FORMAT_R16G16_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
-            d.exposure=resource(exposure_image,FFX_API_SURFACE_FORMAT_R32_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
+            d.exposure=resource(exposure_image,half_exposure_test ? FFX_API_SURFACE_FORMAT_R16_FLOAT : FFX_API_SURFACE_FORMAT_R32_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
             if (nms_inputs && !external_exposure_test) d.exposure={};
             d.output=resource(output,FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
             if (game_formats) {
@@ -1190,6 +1197,24 @@ int main(int argc, char** argv) {
                 if (ffxDispatch(&api_context,&d.header)==FFX_API_RETURN_OK)
                     throw std::runtime_error("ambiguous depth target was not rejected");
                 d.depth.description.usage = valid_usage;
+                if(external_exposure_test) {
+                    const auto valid_exposure=d.exposure;
+                    for(unsigned invalid=0;invalid<5;++invalid) {
+                        d.exposure=valid_exposure;
+                        switch(invalid) {
+                            case 0:d.exposure.description.format=FFX_API_SURFACE_FORMAT_R16_UINT;break;
+                            case 1:d.exposure.description.width=2;break;
+                            case 2:d.exposure.resource=nullptr;break;
+                            case 3:d.exposure.description.type=FFX_API_RESOURCE_TYPE_BUFFER;break;
+                            case 4:d.exposure.state=FFX_API_RESOURCE_STATE_COPY_DEST;break;
+                        }
+                        if(ffxDispatch(&api_context,&d.header)!=FFX_API_RETURN_ERROR_PARAMETER)
+                            throw std::runtime_error("invalid exposure resource was not rejected");
+                    }
+                    d.exposure=valid_exposure;
+                    std::cout << "exposure_contract=5-invalid-inputs-rejected format="
+                              << (half_exposure_test ? "r16" : "r32") << '\n';
+                }
                 checked_depth_rejection = true;
                 std::cout << "depth_target=cleanly-rejected\n";
             }
@@ -1424,7 +1449,7 @@ int main(int argc, char** argv) {
                         image_barrier(command_buffer,input->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                             VK_PIPELINE_STAGE_2_COPY_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
                     if(external_exposure_test) {
-                        std::memcpy(staging_bytes+exposure_offset,&second_exposure,sizeof(second_exposure));
+                        upload_exposure(second_exposure);
                         image_barrier(command_buffer,exposure_image.image,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
                             VK_PIPELINE_STAGE_2_COPY_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT);

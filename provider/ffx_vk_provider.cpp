@@ -629,8 +629,13 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
             game_depth ? depth_stencil : 0);
         const auto motion = resource("motion",d.motionVectors,rw,rh,FFX_API_SURFACE_FORMAT_R16G16_FLOAT,
             VK_FORMAT_R16G16_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
-        const auto exposure = (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE) ? fsr4core::Image{} : resource("exposure",d.exposure,1,1,FFX_API_SURFACE_FORMAT_R32_FLOAT,
-            VK_FORMAT_R32_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
+        // The adapter samples floating-point exposure and writes our internal
+        // R32 history. Preserve the caller's real format: R16 sampling expands
+        // the value to float without reinterpreting its bits or adding a pass.
+        const bool half_exposure=d.exposure.description.format==FFX_API_SURFACE_FORMAT_R16_FLOAT;
+        const auto exposure = (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE) ? fsr4core::Image{} : resource("exposure",d.exposure,1,1,
+            half_exposure ? FFX_API_SURFACE_FORMAT_R16_FLOAT : FFX_API_SURFACE_FORMAT_R32_FLOAT,
+            half_exposure ? VK_FORMAT_R16_SFLOAT : VK_FORMAT_R32_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
         const auto output = resource("output",d.output,ow,oh,packed_output ? FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT : FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,
             packed_output ? VK_FORMAT_B10G11R11_UFLOAT_PACK32 : VK_FORMAT_R16G16B16A16_SFLOAT,FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
         fsr4core::OptimizedConstants c{};

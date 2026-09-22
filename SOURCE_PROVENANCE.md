@@ -1,6 +1,41 @@
 # Source provenance
 
-## Current release: v0.4
+## Current release: v0.4.1
+
+Production R16_FLOAT exposure support is synced from private commit `d4d728e`.
+The provider now preserves a caller's 1x1 R16_FLOAT or R32_FLOAT exposure format
+when constructing the sampled image view. The existing adapter expands sampled
+values into internal R32 exposure/history, without a new conversion pass or
+shader/model changes. Invalid resource types, sizes, states and formats remain
+rejected. Automatic exposure is unchanged.
+
+The user confirmed Endfield gameplay on W6400/Linux. Two fresh provider logs
+record eight successful contexts with external exposure, including switching
+between 4.0.2 and 4.1.1 at 1126x634 -> 1920x1080. No provider failure or OptiScaler
+error was logged. Enshrouded's separate motion-format issue is not fixed here;
+no universal Unity-game or new native-Windows validation is claimed.
+
+The compressed and debug binaries retain all 948 logical assets / 553 resources.
+Normal SHA-256: `5abd0eb0ff83c02178b388c34cf1ba16338500f7c07b0b529454fab4aae59353`.
+Debug SHA-256: `8c3431f2a077575b9fe5aa2b578b9cfcce274ebe19bee0be013d2e61e7bef165`.
+The bundled OptiScaler, licenses, ZIP layout and `readme.txt` are unchanged from
+v0.4. The debug binary remains independently built, uncompressed and unstripped.
+
+Both final public binaries passed the W6400/GE-Proton11-5 Vulkan 1.1 suite:
+16 paired two-frame cases per binary (both models; R16 versus equivalent R32
+values, including zero, exposure changes, pre-exposure changes, reset, half-float
+rounding and automatic exposure), plus two R32 regressions and two expected
+old-v0.4 R16 rejections. All paired outputs matched byte-for-byte, with zero
+nonfinite pairs and no Vulkan validation warnings/errors. Five malformed
+exposure-resource cases were rejected. CPU decoder corruption/bounds checks,
+deterministic embedding, 12 dispatch-plan checks and ZIP packaging tests passed.
+Both binaries also passed export/ABI, bounded version-query and selector-name
+checks under Proton.
+
+Release ZIP SHA-256:
+`02da87f07c9ee7ede984be98cb5cfc66222ca720de342419e13bca3b606b148f`.
+
+## Previous release: v0.4
 
 Production provider code is synced from private `fsr4-vulkan-translation`
 commit `7824864` (FSR 4.1.1 integration, dual compressed/debug builds, and
