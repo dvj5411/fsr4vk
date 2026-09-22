@@ -94,8 +94,7 @@ OptiScaler and the Native Vulkan Provider, alongside any other code that is orig
 [`LICENSES/GPL-3.0.txt`](LICENSES/GPL-3.0.txt) and the
 pinned source in the `optiscaler` submodule. 
 
-Zstandard retains the BSD license; see [`/LICENSES
-/Zstandard-BSD.txt`](/LICENSES/Zstandard-BSD.txt).
+Zstandard retains the BSD license; see [`/LICENSES/Zstandard-BSD.txt`](/LICENSES/Zstandard-BSD.txt).
 
 See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for any other licensing notices.
 
