@@ -94,5 +94,4 @@ pinned source in the `optiscaler` submodule. See
 The v0.3.2.4 prebuilt OptiScaler DLL is an exception: its source revision is
 unavailable, and the submodule must not be treated as its matching source.
 
-Public distribution remains experimental. Review the recorded provenance and
-license boundaries before reusing or redistributing the model/shader material.
+
