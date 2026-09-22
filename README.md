@@ -96,6 +96,4 @@ pinned source in the `optiscaler` submodule.
 
 Zstandard retains the BSD license; see [`/LICENSES/Zstandard-BSD.txt`](/LICENSES/Zstandard-BSD.txt).
 
-See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for any other licensing notices.
-
-
+Any other licenses not covered here hold the respective licenses that they originally retain.
