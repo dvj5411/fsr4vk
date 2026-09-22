@@ -86,8 +86,8 @@ sharpening is not supported.
 This mixed-source repository does not have a single repository-wide license.
 AMD-derived SDK headers and model/shader payloads retain AMD's MIT license; see
 [`LICENSES/AMD-FidelityFX-SDK-MIT.md`](LICENSES/AMD-FidelityFX-SDK-MIT.md).
-OptiScaler is GPLv3; see
-[`LICENSES/OptiScaler-GPL-3.0.txt`](LICENSES/OptiScaler-GPL-3.0.txt) and the
+OptiScaler and the Native Vulkan Provider, alongside any other code that is original is GPLv3; see
+[`LICENSES/GPL-3.0.txt`](LICENSES/GPL-3.0.txt) and the
 pinned source in the `optiscaler` submodule. See
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
 [`SOURCE_PROVENANCE.md`](SOURCE_PROVENANCE.md) for exact revisions.
