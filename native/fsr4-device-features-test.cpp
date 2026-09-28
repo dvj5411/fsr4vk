@@ -15,10 +15,12 @@ bool expose_synchronization2 = true;
 bool expose_mixed_dot = true;
 bool expose_float_controls2 = true;
 bool expose_memory_scope = true;
+bool expose_int16 = true;
+bool expose_cooperative = true;
 
 void VKAPI_CALL query_features(VkPhysicalDevice,
                                VkPhysicalDeviceFeatures2 *features) {
-  features->features.shaderInt16 = VK_TRUE;
+  features->features.shaderInt16 = expose_int16;
   features->features.shaderStorageImageReadWithoutFormat = VK_TRUE;
   features->features.shaderStorageImageWriteWithoutFormat = VK_TRUE;
   for (auto *node = reinterpret_cast<VkBaseOutStructure *>(features->pNext);
@@ -32,9 +34,12 @@ void VKAPI_CALL query_features(VkPhysicalDevice,
           value->descriptorBindingVariableDescriptorCount = VK_TRUE;
       value->bufferDeviceAddress = VK_TRUE;
       value->vulkanMemoryModelDeviceScope = expose_memory_scope;
+      value->vulkanMemoryModel = VK_TRUE;
       break;
     }
     case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES:
+      reinterpret_cast<VkPhysicalDeviceVulkanMemoryModelFeatures *>(node)
+          ->vulkanMemoryModel = VK_TRUE;
       reinterpret_cast<VkPhysicalDeviceVulkanMemoryModelFeatures *>(node)
           ->vulkanMemoryModelDeviceScope = expose_memory_scope;
       break;
@@ -42,8 +47,17 @@ void VKAPI_CALL query_features(VkPhysicalDevice,
       auto *value = reinterpret_cast<VkPhysicalDeviceVulkan13Features *>(node);
       value->synchronization2 = expose_synchronization2;
       value->shaderIntegerDotProduct = VK_TRUE;
+      value->subgroupSizeControl = value->computeFullSubgroups = VK_TRUE;
       break;
     }
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES: {
+      auto* value=reinterpret_cast<VkPhysicalDeviceSubgroupSizeControlFeatures*>(node);
+      value->subgroupSizeControl=value->computeFullSubgroups=VK_TRUE;
+      break;
+    }
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR:
+      reinterpret_cast<VkPhysicalDeviceCooperativeMatrixFeaturesKHR*>(node)->cooperativeMatrix=expose_cooperative;
+      break;
     case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES: {
       auto *value =
           reinterpret_cast<VkPhysicalDeviceShaderFloat16Int8Features *>(node);
@@ -150,6 +164,7 @@ void require(bool value, const char *message) {
 } // namespace
 
 int main() {
+  unsetenv("FSR4_VK_COOP_MAT");
   available_extensions = {
       VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME,
       VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
@@ -163,7 +178,34 @@ int main() {
       VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
       VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
       VK_KHR_SHADER_INTEGER_DOT_PRODUCT_EXTENSION_NAME,
+      VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME,
+      VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME,
+      VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME,
   };
+  for(uint32_t api : {VK_API_VERSION_1_1,VK_API_VERSION_1_2,VK_API_VERSION_1_3}) {
+    VkDeviceCreateInfo empty{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+    fsr4vk::DeviceFeatures off(reinterpret_cast<VkPhysicalDevice>(1),empty,api,query_features,enumerate_extensions);
+    require(!has_extension(off.get(),VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME),"default path unexpectedly requests cooperative matrices");
+    setenv("FSR4_VK_COOP_MAT","1",1);
+    expose_cooperative=false;
+    bool rejected=false;
+    try { fsr4vk::DeviceFeatures unsupported(reinterpret_cast<VkPhysicalDevice>(1),empty,api,query_features,enumerate_extensions); }
+    catch(const std::runtime_error& e) { rejected=std::strstr(e.what(),"cooperativeMatrix")!=nullptr; }
+    require(rejected,"missing cooperative feature not diagnosed");
+    expose_cooperative=true;
+    fsr4vk::DeviceFeatures on(reinterpret_cast<VkPhysicalDevice>(1),empty,api,query_features,enumerate_extensions);
+    const auto* matrix=find_structure<VkPhysicalDeviceCooperativeMatrixFeaturesKHR>(on.get(),VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR);
+    require(matrix && matrix->cooperativeMatrix && has_extension(on.get(),VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME),"cooperative opt-in not enabled");
+    require(empty.pNext==nullptr && empty.enabledExtensionCount==0,"cooperative preparation mutated caller");
+    unsetenv("FSR4_VK_COOP_MAT");
+  }
+  setenv("FSR4_VK_COOP_MAT","yes",1);
+  bool bad_option=false;
+  try { (void)fsr4vk::cooperative_matrix_requested(); } catch(const std::invalid_argument&) { bad_option=true; }
+  require(bad_option,"invalid cooperative option accepted");
+  setenv("FSR4_VK_COOP_MAT","0",1);
+  require(!fsr4vk::cooperative_matrix_requested(),"explicit cooperative disable ignored");
+  unsetenv("FSR4_VK_COOP_MAT");
   // Reproduce every sType from the RDR2 benchmark's post-OptiScaler chain.
   for (bool native : {false, true}) {
     expose_mixed_dot = native;
@@ -685,5 +727,20 @@ int main() {
             "Vulkan 1.0 rejection does not name the minimum version");
   }
 
+  // Report multiple missing features AND extensions together, not just the first.
+  expose_int16=expose_synchronization2=false;
+  available_extensions.erase(std::remove(available_extensions.begin(),available_extensions.end(),
+      VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME),available_extensions.end());
+  bool rejected=false;
+  try {
+    fsr4vk::DeviceFeatures missing(reinterpret_cast<VkPhysicalDevice>(1),source,VK_API_VERSION_1_1,
+        query_features,enumerate_extensions);
+  } catch(const std::runtime_error& error) {
+    rejected=true;
+    for(const auto* expected : {"shaderInt16","synchronization2","VK_KHR_synchronization2",
+        "VK_EXT_descriptor_buffer","physical GPU/driver capabilities"})
+      require(std::strstr(error.what(),expected)!=nullptr,"incomplete aggregated capability diagnostic");
+  }
+  require(rejected,"unsupported capabilities accepted");
   std::cout << "Vulkan 1.1 device feature-chain tests passed\n";
 }

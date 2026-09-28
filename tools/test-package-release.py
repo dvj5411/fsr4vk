@@ -23,7 +23,7 @@ class PackageTests(unittest.TestCase):
             with zipfile.ZipFile(archive) as z:
                 self.assertEqual(set(z.namelist()),{'OptiScaler/amd_fidelityfx_upscaler_vk.dll',
                     'OptiScaler.dll','OptiScaler/amd_fidelityfx_upscaler_vk_debug.dll','readme.txt',
-                    'LICENSES/AMD-FidelityFX-SDK-MIT.md','LICENSES/OptiScaler-GPL-3.0.txt',
+                    'LICENSES/AMD-FidelityFX-SDK-MIT.md','LICENSES/GPL-3.0.txt',
                     'LICENSES/Zstandard-BSD.txt'})
                 self.assertEqual(z.read('OptiScaler.dll'),payloads['primary.dll'])
                 self.assertEqual(z.read('OptiScaler/amd_fidelityfx_upscaler_vk_debug.dll'),payloads['debug.dll'])

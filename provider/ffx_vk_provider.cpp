@@ -15,6 +15,11 @@
 #include "ffx_vk_preset_query.h"
 #include "vulkan_device_features.hpp"
 #include "diagnostic-options.hpp"
+#include "resource-diagnostics.hpp"
+#include "device-feature-diagnostics.hpp"
+#include "input-formats.hpp"
+#include "ffx_vk_native_inputs.h"
+#include "ffx_vk_cooperative_matrix.h"
 
 #include <algorithm>
 #include <cmath>
@@ -79,6 +84,11 @@ struct ProviderContext {
     bool sharpening_ignored_logged = false;
     bool optional_masks_ignored_logged = false;
     bool pending_color_reset = false;
+    bool resource_snapshot_logged = false;
+    uint64_t dispatch_attempts = 0;
+    uint64_t dispatch_successes = 0;
+    VkFormat motion_override = VK_FORMAT_UNDEFINED;
+    bool cooperative_matrix = false;
 };
 
 constexpr const char* presetName(std::uint32_t id) noexcept {
@@ -99,15 +109,43 @@ const char* selectedPreset(const ProviderContext& context, uint32_t rw, uint32_t
                                                      : presetName(context.forced_preset);
 }
 
-void diagnostic(const ProviderContext& context, const std::string& text) noexcept {
+std::filesystem::path diagnostic_path(const std::filesystem::path& assets={}) noexcept {
+#if defined(_WIN32)
+    (void)assets;
+#endif
     try {
-        if (!context.diagnostic_path.empty()) {
-            std::ofstream log(context.diagnostic_path,std::ios::app);
+        const char* log=std::getenv("FSR4_VK_LOG_PATH");
+        if(!fsr4vk::provider_log_requested(std::getenv("FSR4_VK_LOG"),log)) return {};
+        if(log && *log) return log;
+#if defined(_WIN32)
+        wchar_t executable[32768]{};
+        const auto length=GetModuleFileNameW(nullptr,executable,32768);
+        const auto host=(length && length<32768) ? std::filesystem::path(executable) : std::filesystem::path{};
+        std::error_code ec;
+        auto temp=std::filesystem::temp_directory_path(ec);
+        if(ec) temp.clear();
+        return fsr4vk::default_provider_log_path(host,temp,GetCurrentProcessId(),[](const auto& path) {
+            std::ofstream stream(path,std::ios::app); return stream.good();
+        });
+#else
+        return (assets.empty() ? std::filesystem::current_path() : assets)/"provider.log";
+#endif
+    } catch(...) { return {}; }
+}
+
+void write_diagnostic(const std::filesystem::path& path,uint64_t id,const std::string& text) noexcept {
+    try {
+        if (!path.empty()) {
+            std::ofstream log(path,std::ios::app);
             const auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()).count();
-            log << "[time_ms=" << ms << " context=" << context.diagnostic_id << "] " << text << '\n';
+            log << "[time_ms=" << ms << " context=" << id << "] " << text << '\n';
         }
     } catch (...) { }
+}
+
+void diagnostic(const ProviderContext& context,const std::string& text) noexcept {
+    write_diagnostic(context.diagnostic_path,context.diagnostic_id,text);
 }
 
 void provider_message(const ProviderContext& context, uint32_t type,
@@ -212,6 +250,13 @@ ffxReturnCode_t prepareVulkanDevice(ffxQueryDescVkPrepareDevice* query) noexcept
             query->physicalDevice, *query->sourceCreateInfo, query->apiVersion,
             query->getPhysicalDeviceFeatures2,
             query->enumerateDeviceExtensionProperties);
+        // Negotiation happens before a provider context exists; still record the
+        // exact disabled/missing request fields in the same opt-in game log.
+        try {
+            const auto path=diagnostic_path();
+            if(!path.empty()) write_diagnostic(path,0,fsr4vk::device_enablement_diagnostic(
+                *query->sourceCreateInfo,*requirements->get()));
+        } catch(...) { }
         query->outputCreateInfo = requirements->get();
         query->token = requirements.release();
         return FFX_API_RETURN_OK;
@@ -223,6 +268,7 @@ ffxReturnCode_t prepareVulkanDevice(ffxQueryDescVkPrepareDevice* query) noexcept
             error += " " + std::to_string(node->sType);
         error += ")";
         query->errorMessage = error.c_str();
+        write_diagnostic(diagnostic_path(),0,"device negotiation failed: "+error);
         return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
     } catch (...) {
         error = "unknown Vulkan device-requirements failure";
@@ -242,6 +288,13 @@ ffxReturnCode_t releaseVulkanDevice(ffxQueryDescVkReleaseDevice* query) noexcept
 
 ffxReturnCode_t queryUpscale(ffxContext* context, ffxQueryDescHeader* header) {
     switch (header->type) {
+    case FSR4VK_QUERY_DESC_TYPE_NATIVE_INPUTS: {
+        auto* query = reinterpret_cast<Fsr4VkQueryNativeInputs*>(header);
+        query->version = 0;
+        if (context && !*context) return FFX_API_RETURN_ERROR_PARAMETER;
+        query->version = 1;
+        return FFX_API_RETURN_OK;
+    }
     case FSR4VK_QUERY_DESC_TYPE_PRESET_CAPABILITIES: {
         auto* query = reinterpret_cast<Fsr4VkQueryPresetCapabilities*>(header);
         query->forcedPresetMask = 0;
@@ -379,32 +432,26 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
             if (!std::filesystem::is_directory(assets/"general"))
                 throw std::invalid_argument("general-resolution asset bundles are missing");
         }
-        const char* log=std::getenv("FSR4_VK_LOG_PATH");
-        if (fsr4vk::provider_log_requested(std::getenv("FSR4_VK_LOG"), log)) {
-            if (log && *log) provider->diagnostic_path=log;
-#if defined(_WIN32)
-            else {
-                // nullptr selects the host EXE even when this DLL lives under
-                // OptiScaler/. Failure to open a log must not fail the upscaler.
-                try {
-                    wchar_t executable[32768]{};
-                    const auto length=GetModuleFileNameW(nullptr,executable,32768);
-                    const auto host=(length && length<32768)
-                        ? std::filesystem::path(executable) : std::filesystem::path{};
-                    std::error_code ec;
-                    auto temp=std::filesystem::temp_directory_path(ec);
-                    if(ec) temp.clear();
-                    provider->diagnostic_path=fsr4vk::default_provider_log_path(
-                        host,temp,GetCurrentProcessId(),[](const std::filesystem::path& path) {
-                            std::ofstream stream(path,std::ios::app);
-                            return stream.good();
-                        });
-                } catch (...) { }
+        provider->diagnostic_path=diagnostic_path(assets);
+        diagnostic(*provider,"diagnostics_schema=2 provider_build=" __DATE__ " " __TIME__);
+        provider->cooperative_matrix=fsr4vk::cooperative_matrix_requested();
+        if(provider->cooperative_matrix) {
+            const Fsr4VkCreateCooperativeMatrix* coop=nullptr;
+            unsigned count=0;
+            for(auto* node=header;node;node=node->pNext) {
+                if(++count>64)throw std::invalid_argument("context extension chain is cyclic or too long");
+                if(node->type==FSR4VK_CREATE_DESC_TYPE_COOPERATIVE_MATRIX) {
+                    if(coop)throw std::invalid_argument("duplicate cooperative matrix descriptor");
+                    coop=reinterpret_cast<const Fsr4VkCreateCooperativeMatrix*>(node);
+                }
             }
-#else
-            else provider->diagnostic_path=assets/"provider.log";
-#endif
+            fsr4vk::validate_cooperative_matrix(provider->physicalDevice,coop ? coop->getProperties : nullptr,
+                                              coop ? coop->deviceFeaturesEnabled : VK_FALSE);
+            diagnostic(*provider,"cooperative matrix requested=1 configuration=16x16x16 SINT8/SINT32 wave32; host confirms device enablement; hardware acceleration and speedup are NOT inferred from extension support");
         }
+        provider->motion_override=fsr4vk::motion_format_override(std::getenv("FSR4_VK_MOTION_FORMAT"));
+        if(provider->motion_override!=VK_FORMAT_UNDEFINED)
+            diagnostic(*provider,"explicit motion format override=VK_FORMAT_R16G16_SNORM; applies only to FFX R8G8B8A8_SNORM metadata; original VkImage format must match; no automatic alias guessing");
         diagnostic(*provider,"context request flags="+std::to_string(create->flags)+
                    " max_render="+std::to_string(create->maxRenderSize.width)+"x"+
                    std::to_string(create->maxRenderSize.height)+" max_output="+
@@ -425,6 +472,9 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
         diagnostic(*provider,"context created flags="+std::to_string(create->flags)+
                    " api="+std::to_string(VK_API_VERSION_MAJOR(provider->apiVersion))+"."+
                    std::to_string(VK_API_VERSION_MINOR(provider->apiVersion)));
+        diagnostic(*provider,"input contract: inverted_depth=true motion_vectors=render-resolution,non-jittered exposure="+
+            std::string((create->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE) ? "automatic (external exposure ignored)" : "external (1x1 R16_FLOAT or R32_FLOAT required)")+
+            " HDR="+std::to_string(bool(create->flags & FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE)));
     } catch (const std::exception& error) {
         provider_message(*provider,FFX_API_MESSAGE_TYPE_ERROR,std::string("context rejected: ")+error.what());
         provider->~ProviderContext();
@@ -440,7 +490,11 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDestroyContext(
     const ffxAllocationCallbacks* callbacks) {
     if (!context || !*context || !validAllocator(callbacks)) return FFX_API_RETURN_ERROR_PARAMETER;
     auto* provider = reinterpret_cast<ProviderContext*>(*context);
-    diagnostic(*provider,"context destroyed cached_models="+std::to_string(provider->cores.size()));
+    diagnostic(*provider,"context destroyed cached_models="+std::to_string(provider->cores.size())+
+        " dispatch_attempts="+std::to_string(provider->dispatch_attempts)+
+        " dispatches_recorded="+std::to_string(provider->dispatch_successes)+
+        " rejected_or_failed="+std::to_string(provider->dispatch_attempts-provider->dispatch_successes)+
+        " (recorded does not imply GPU completion)");
     provider->~ProviderContext();
     deallocate(callbacks, provider);
     *context = nullptr;
@@ -506,12 +560,14 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
     }
     auto* provider = static_cast<ProviderContext*>(*context);
     const auto& d = *reinterpret_cast<const ffxDispatchDescUpscale*>(header);
+    ++provider->dispatch_attempts;
+    const char* stage="dispatch validation";
     const auto rw=d.renderSize.width,rh=d.renderSize.height;
     const auto ow=d.upscaleSize.width ? d.upscaleSize.width : provider->maxUpscaleSize.width;
     const auto oh=d.upscaleSize.height ? d.upscaleSize.height : provider->maxUpscaleSize.height;
     const auto reject = [provider](const char* reason) {
         provider_message(*provider,FFX_API_MESSAGE_TYPE_ERROR,
-                         std::string("FSR4 Vulkan dispatch rejected: ")+reason);
+                         "FSR4 Vulkan dispatch rejected: attempt="+std::to_string(provider->dispatch_attempts)+" "+reason);
         return FFX_API_RETURN_ERROR_PARAMETER;
     };
     if (!d.commandList) return reject("null command list");
@@ -537,22 +593,98 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                          "the current model path does not consume them");
         provider->optional_masks_ignored_logged = true;
     }
-    const auto resource = [](const char* name, const FfxApiResource& r, uint32_t width, uint32_t height,
+    std::string resource_errors;
+    const auto resource = [&resource_errors](const char* name, const FfxApiResource& r, uint32_t width, uint32_t height,
                              uint32_t format, VkFormat vkformat, uint32_t state,
-                             uint32_t depth_usage = 0) {
-        if (!r.resource || r.description.type != FFX_API_RESOURCE_TYPE_TEXTURE2D ||
-            (r.description.usage & (FFX_API_RESOURCE_USAGE_DEPTHTARGET | FFX_API_RESOURCE_USAGE_STENCILTARGET)) != depth_usage ||
-            r.description.width != width || r.description.height != height ||
-            r.description.format != format || r.state != state)
-            throw std::invalid_argument(std::string("unsupported ")+name+" resource");
+                             const char* accepted, uint32_t depth_usage = 0) {
+        const auto problem=fsr4vk::resource_problem(name,r,width,height,format,state,depth_usage,accepted);
+        if(!problem.empty()) {
+            if(!resource_errors.empty()) resource_errors+=" | ";
+            resource_errors+=problem;
+        }
         return fsr4core::Image{reinterpret_cast<VkImage>(r.resource),VK_NULL_HANDLE,
                               VK_NULL_HANDLE,vkformat,width,height};
     };
     try {
+        if(!provider->resource_snapshot_logged && !provider->diagnostic_path.empty()) {
+            diagnostic(*provider,"first-dispatch inputs: render="+std::to_string(rw)+"x"+std::to_string(rh)+
+                " output="+std::to_string(ow)+"x"+std::to_string(oh)+
+                " preExposure="+std::to_string(d.preExposure)+" reset="+std::to_string(d.reset)+
+                " dispatch_flags="+std::to_string(d.flags));
+            const std::pair<const char*,const FfxApiResource*> inputs[]={
+                {"color",&d.color},{"depth",&d.depth},{"motionVectors",&d.motionVectors},
+                {"exposure",&d.exposure},{"output",&d.output}};
+            for(const auto& entry : inputs)
+                diagnostic(*provider,fsr4vk::resource_snapshot(entry.first,*entry.second));
+            provider->resource_snapshot_logged=true;
+        }
         fsr4::validate_dimensions(rw,rh,ow,oh);
         if(rw>provider->maxRenderSize.width || rh>provider->maxRenderSize.height ||
            ow>provider->maxUpscaleSize.width || oh>provider->maxUpscaleSize.height)
             throw std::invalid_argument("dispatch dimensions exceed context capacity");
+        stage="resource validation";
+        const bool packed_color=d.color.description.format==FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT;
+        const bool shared_exponent_color=
+            d.color.description.format==FFX_API_SURFACE_FORMAT_R9G9B9E5_SHAREDEXP;
+        const bool packed_output=d.output.description.format==FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT;
+        const uint32_t depth_stencil=FFX_API_RESOURCE_USAGE_DEPTHTARGET | FFX_API_RESOURCE_USAGE_STENCILTARGET;
+        const uint32_t depth_usage=d.depth.description.usage & depth_stencil;
+        // The host marks real depth images separately from R32 color images.
+        // D32-only and D32S8 must both be sampled through the DEPTH aspect.
+        const auto depth_format=depth_usage==FFX_API_RESOURCE_USAGE_STENCILTARGET
+            ? VK_FORMAT_UNDEFINED : fsr4vk::depth_view_format(depth_usage);
+        const auto color_format=shared_exponent_color ? FFX_API_SURFACE_FORMAT_R9G9B9E5_SHAREDEXP :
+            (packed_color ? FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT : FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT);
+        const auto color_vk_format=shared_exponent_color ? VK_FORMAT_E5B9G9R9_UFLOAT_PACK32 :
+            (packed_color ? VK_FORMAT_B10G11R11_UFLOAT_PACK32 : VK_FORMAT_R16G16B16A16_SFLOAT);
+        const auto color = resource("color",d.color,rw,rh,color_format,color_vk_format,
+            FFX_API_RESOURCE_STATE_COMPUTE_READ,"R16G16B16A16_FLOAT, R11G11B10_FLOAT, R9G9B9E5_SHAREDEXP");
+        const auto depth = resource("depth",d.depth,rw,rh,FFX_API_SURFACE_FORMAT_R32_FLOAT,
+            depth_format,FFX_API_RESOURCE_STATE_COMPUTE_READ,
+            "R32_FLOAT (R32_SFLOAT with no depth flags; D32_SFLOAT with DEPTHTARGET; D32_SFLOAT_S8_UINT with both depth/stencil flags)",
+            depth_format==VK_FORMAT_UNDEFINED ? 0 : depth_usage);
+        // Native metadata wins over the legacy environment override. It belongs
+        // to this dispatch, so resource/preset changes cannot reuse stale formats.
+        VkFormat native_motion=VK_FORMAT_UNDEFINED;
+        bool native_motion_supplied=false;
+        unsigned chain_length=0;
+        for(auto* node=d.header.pNext;node;node=node->pNext) {
+            if(++chain_length>64) throw std::invalid_argument("dispatch extension chain is cyclic or too long");
+            if(node->type!=FSR4VK_DISPATCH_DESC_TYPE_NATIVE_INPUTS) continue;
+            if(native_motion_supplied) throw std::invalid_argument("duplicate native input format descriptor");
+            native_motion_supplied=true;
+            native_motion=static_cast<VkFormat>(reinterpret_cast<const Fsr4VkDispatchNativeInputs*>(node)->motionFormat);
+            if(native_motion!=VK_FORMAT_R16G16_SNORM && native_motion!=VK_FORMAT_R16G16_SFLOAT)
+                throw std::invalid_argument("motionVectors: native VkFormat="+std::to_string(native_motion)+
+                    " incompatible; accepted VK_FORMAT_R16G16_SNORM(78), VK_FORMAT_R16G16_SFLOAT(83)");
+            const auto expected=native_motion==VK_FORMAT_R16G16_SNORM ? FFX_API_SURFACE_FORMAT_R8G8B8A8_SNORM : FFX_API_SURFACE_FORMAT_R16G16_FLOAT;
+            if(d.motionVectors.description.format!=expected)
+                throw std::invalid_argument("motionVectors: native VkFormat contradicts FFX format="+
+                    fsr4vk::surface_format(d.motionVectors.description.format));
+        }
+        const auto motion_view=native_motion_supplied ? native_motion : provider->motion_override;
+        const bool snorm_motion=d.motionVectors.description.format==FFX_API_SURFACE_FORMAT_R8G8B8A8_SNORM &&
+            motion_view!=VK_FORMAT_UNDEFINED;
+        const auto motion = resource("motionVectors",d.motionVectors,rw,rh,
+            snorm_motion ? FFX_API_SURFACE_FORMAT_R8G8B8A8_SNORM : FFX_API_SURFACE_FORMAT_R16G16_FLOAT,
+            snorm_motion ? motion_view : VK_FORMAT_R16G16_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ,
+            snorm_motion ? "R16G16_FLOAT; R8G8B8A8_SNORM metadata with explicit original-VkImage format override" :
+                "R16G16_FLOAT (VK_FORMAT_R16G16_SFLOAT); ambiguous SNORM host aliases require an explicit FSR4_VK_MOTION_FORMAT matching the original VkImage");
+        // The adapter samples floating-point exposure and writes our internal
+        // R32 history. Preserve the caller's real format: R16 sampling expands
+        // the value to float without reinterpreting its bits or adding a pass.
+        const bool half_exposure=d.exposure.description.format==FFX_API_SURFACE_FORMAT_R16_FLOAT;
+        const auto exposure = (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE) ? fsr4core::Image{} : resource("exposure",d.exposure,1,1,
+            half_exposure ? FFX_API_SURFACE_FORMAT_R16_FLOAT : FFX_API_SURFACE_FORMAT_R32_FLOAT,
+            half_exposure ? VK_FORMAT_R16_SFLOAT : VK_FORMAT_R32_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ,"R16_FLOAT, R32_FLOAT");
+        const auto output = resource("output",d.output,ow,oh,packed_output ? FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT : FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,
+            packed_output ? VK_FORMAT_B10G11R11_UFLOAT_PACK32 : VK_FORMAT_R16G16B16A16_SFLOAT,FFX_API_RESOURCE_STATE_UNORDERED_ACCESS,"R16G16B16A16_FLOAT, R11G11B10_FLOAT");
+        if(!resource_errors.empty()) throw std::invalid_argument(resource_errors);
+        if(provider->first_dispatch && !provider->diagnostic_path.empty())
+            diagnostic(*provider,"resolved input views: depth VkFormat="+std::to_string(depth.format)+
+                " motion VkFormat="+std::to_string(motion.format)+
+                (native_motion_supplied ? " source=host-native-metadata" : snorm_motion ? " source=legacy-environment-override" : " source=FFX")+
+                (snorm_motion ? " (native SNORM sampling, not bit reinterpretation)" : ""));
         const std::string selected_preset=selectedPreset(*provider,rw,ow);
         // Repeated dispatches use the same owned core without a map lookup.
         // std::map keeps the other cores alive; switching never frees in-flight work.
@@ -560,26 +692,45 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         if (!core) core=provider->cores[selected_preset].get();
         if(!core) {
             if (!provider->device_support_checked) {
+                stage="device capability check";
                 // This queries physical support, NOT the bits enabled on the
                 // application's already-created VkDevice. Vulkan exposes no
                 // general post-creation query for those bits.
                 VkPhysicalDeviceProperties properties{};
                 vkGetPhysicalDeviceProperties(provider->physicalDevice,&properties);
+                diagnostic(*provider,"device="+std::string(properties.deviceName)+
+                    " vendorID="+std::to_string(properties.vendorID)+" deviceID="+std::to_string(properties.deviceID)+
+                    " driverVersion_raw="+std::to_string(properties.driverVersion)+
+                    " physical_API="+std::to_string(VK_API_VERSION_MAJOR(properties.apiVersion))+"."+
+                    std::to_string(VK_API_VERSION_MINOR(properties.apiVersion))+"."+
+                    std::to_string(VK_API_VERSION_PATCH(properties.apiVersion))+
+                    " (properties reported by loader; host may spoof identity)");
                 VkDeviceCreateInfo empty{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
                 try {
                     fsr4vk::DeviceFeatures supported(provider->physicalDevice,empty,properties.apiVersion,
                         vkGetPhysicalDeviceFeatures2,vkEnumerateDeviceExtensionProperties);
+                    if(!provider->diagnostic_path.empty()) {
+                        // Use the application's API version for promoted-extension requirements.
+                        try {
+                            fsr4vk::DeviceFeatures contract(provider->physicalDevice,empty,provider->apiVersion,
+                                vkGetPhysicalDeviceFeatures2,vkEnumerateDeviceExtensionProperties);
+                            diagnostic(*provider,fsr4vk::device_contract_diagnostic(*contract.get()));
+                        } catch(const std::exception& error) {
+                            diagnostic(*provider,std::string("application API contract check: ")+error.what());
+                        }
+                    }
                 } catch(const std::exception& error) {
                     throw std::runtime_error(std::string("FSR4VK_ERROR_DEVICE_CAPABILITY_CHECK: ")+error.what()+
                         "; check GPU/driver support; unsupported capabilities cannot be enabled by the provider");
                 }
-                diagnostic(*provider,"physical capability check passed; enabled feature bits cannot be queried after vkCreateDevice. "
-                    "Host must enable descriptorBindingVariableDescriptorCount, mutableDescriptorType, computeDerivativeGroupLinear, "
-                    "shaderIntegerDotProduct and other required shader features; vulkanMemoryModel requires device scope when enabled.");
+                diagnostic(*provider,"physical capability check passed; enabled feature status=UNKNOWN (Vulkan cannot query enabled bits after vkCreateDevice). "
+                    "See context=0 device negotiation for the exact host-request changes, if the host called PREPARE_DEVICE; "
+                    "without that call the host must log its VkDeviceCreateInfo. Physical support is not proof of enablement.");
                 provider->device_support_checked=true;
             }
             diagnostic(*provider,"creating model="+selected_preset+
                        " exposure="+((provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE) ? "auto" : "external"));
+            stage="model/pipeline creation";
             const auto build_started=std::chrono::steady_clock::now();
             const auto bucket=provider->maxUpscaleSize.width>1920 || provider->maxUpscaleSize.height>1080 ? "2160" : "1080";
             const auto bundle=provider->assets/"general"/bucket/selected_preset;
@@ -589,7 +740,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                 provider->maxRenderSize.width,provider->maxRenderSize.height,
                 provider->maxUpscaleSize.width,provider->maxUpscaleSize.height,
                 provider->apiVersion,
-                (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0,provider->version==kVersion411Id);
+                (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0,provider->version==kVersion411Id,provider->cooperative_matrix);
             core=created.get();
             provider->cores[selected_preset]=std::move(created);
             if(!provider->diagnostic_path.empty()) {
@@ -603,7 +754,11 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
             diagnostic(*provider,"model ready="+selected_preset+" cpu_build_ms="+
                 std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::steady_clock::now()-build_started).count()));
+            if(provider->cooperative_matrix)
+                diagnostic(*provider,"cooperative_matrix rewritten_blocks="+std::to_string(core->cooperative_block_count())+
+                    " scope=subgroup wave_size=32; unmatched blocks and partial subgroups retain scalar dots");
         }
+        stage="color-space pipeline selection";
         const bool color_changed=core->set_color_space(color_space);
         provider->pending_color_reset |= color_changed;
         if(color_changed || provider->first_dispatch)
@@ -612,32 +767,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         const bool force_reset=provider->pending_color_reset || provider->active_preset!=selected_preset ||
                                provider->last_output_width!=ow ||
                                provider->last_output_height!=oh;
-        const bool packed_color=d.color.description.format==FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT;
-        const bool shared_exponent_color=
-            d.color.description.format==FFX_API_SURFACE_FORMAT_R9G9B9E5_SHAREDEXP;
-        const bool packed_output=d.output.description.format==FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT;
-        const uint32_t depth_stencil=FFX_API_RESOURCE_USAGE_DEPTHTARGET | FFX_API_RESOURCE_USAGE_STENCILTARGET;
-        const bool game_depth=(d.depth.description.usage & depth_stencil)==depth_stencil;
-        const auto color_format=shared_exponent_color ? FFX_API_SURFACE_FORMAT_R9G9B9E5_SHAREDEXP :
-            (packed_color ? FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT : FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT);
-        const auto color_vk_format=shared_exponent_color ? VK_FORMAT_E5B9G9R9_UFLOAT_PACK32 :
-            (packed_color ? VK_FORMAT_B10G11R11_UFLOAT_PACK32 : VK_FORMAT_R16G16B16A16_SFLOAT);
-        const auto color = resource("color",d.color,rw,rh,color_format,color_vk_format,
-            FFX_API_RESOURCE_STATE_COMPUTE_READ);
-        const auto depth = resource("depth",d.depth,rw,rh,FFX_API_SURFACE_FORMAT_R32_FLOAT,
-            game_depth ? VK_FORMAT_D32_SFLOAT_S8_UINT : VK_FORMAT_R32_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ,
-            game_depth ? depth_stencil : 0);
-        const auto motion = resource("motion",d.motionVectors,rw,rh,FFX_API_SURFACE_FORMAT_R16G16_FLOAT,
-            VK_FORMAT_R16G16_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
-        // The adapter samples floating-point exposure and writes our internal
-        // R32 history. Preserve the caller's real format: R16 sampling expands
-        // the value to float without reinterpreting its bits or adding a pass.
-        const bool half_exposure=d.exposure.description.format==FFX_API_SURFACE_FORMAT_R16_FLOAT;
-        const auto exposure = (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE) ? fsr4core::Image{} : resource("exposure",d.exposure,1,1,
-            half_exposure ? FFX_API_SURFACE_FORMAT_R16_FLOAT : FFX_API_SURFACE_FORMAT_R32_FLOAT,
-            half_exposure ? VK_FORMAT_R16_SFLOAT : VK_FORMAT_R32_SFLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
-        const auto output = resource("output",d.output,ow,oh,packed_output ? FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT : FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,
-            packed_output ? VK_FORMAT_B10G11R11_UFLOAT_PACK32 : VK_FORMAT_R16G16B16A16_SFLOAT,FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
+        stage="dispatch recording";
         fsr4core::OptimizedConstants c{};
         const bool fsr411=provider->version==kVersion411Id;
         // Unlike 4.0.2, 4.1.1 keeps image sampling at the exact output size.
@@ -677,14 +807,17 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                 std::to_string(c.mv_scale[1]));
             provider->first_dispatch=false;
         }
+        ++provider->dispatch_successes;
         return FFX_API_RETURN_OK;
     } catch (const std::invalid_argument& error) {
         provider_message(*provider,FFX_API_MESSAGE_TYPE_ERROR,
-                         std::string("FSR4 Vulkan dispatch rejected: ")+error.what());
+                         "FSR4 Vulkan dispatch rejected: attempt="+std::to_string(provider->dispatch_attempts)+
+                         " stage="+stage+"; "+error.what());
         return FFX_API_RETURN_ERROR_PARAMETER;
     } catch (const std::exception& error) {
         provider_message(*provider,FFX_API_MESSAGE_TYPE_ERROR,
-                         std::string("FSR4 Vulkan dispatch failed: ")+error.what());
+                         "FSR4 Vulkan dispatch failed: attempt="+std::to_string(provider->dispatch_attempts)+
+                         " stage="+stage+"; "+error.what());
         return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
     } catch (...) {
         provider_message(*provider,FFX_API_MESSAGE_TYPE_ERROR,

@@ -5,6 +5,7 @@
 #include <initializer_list>
 #include <stdexcept>
 #include <string>
+#include <cstring>
 
 namespace fsr4vk {
 
@@ -29,7 +30,15 @@ load_device_function(VkDevice device,
     message += name;
     first = false;
   }
-  message += "; the host must enable the required Vulkan extensions/features before vkCreateDevice";
+  const auto* command=names.size() ? *names.begin() : "";
+  if(std::strstr(command,"Descriptor"))
+    message += "; required extension=VK_EXT_descriptor_buffer; required feature=VkPhysicalDeviceDescriptorBufferFeaturesEXT.descriptorBuffer=VK_TRUE";
+  else if(std::strstr(command,"BufferDeviceAddress"))
+    message += "; required API=Vulkan 1.2 or extension VK_KHR_buffer_device_address; required feature=VkPhysicalDeviceBufferDeviceAddressFeatures.bufferDeviceAddress=VK_TRUE (or VkPhysicalDeviceVulkan12Features.bufferDeviceAddress)";
+  else if(std::strstr(command,"PipelineBarrier2") || std::strstr(command,"SetEvent2") ||
+          std::strstr(command,"WriteTimestamp2") || std::strstr(command,"QueueSubmit2"))
+    message += "; required API=Vulkan 1.3 or extension VK_KHR_synchronization2; required feature=VkPhysicalDeviceSynchronization2Features.synchronization2=VK_TRUE (or VkPhysicalDeviceVulkan13Features.synchronization2)";
+  message += "; enable at vkCreateDevice, then recreate the device. Missing entry point is observed; the loader does not reveal which feature bit was disabled";
   throw std::runtime_error(message);
 }
 

@@ -28,6 +28,8 @@ struct CreateBackendVkDesc {
 #include "../provider/ffx_vk_provider.cpp"
 #endif
 
+#include "../provider/ffx_vk_native_inputs.h"
+#include "../provider/ffx_vk_cooperative_matrix.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -45,11 +47,23 @@ struct CreateBackendVkDesc {
 
 namespace fs = std::filesystem;
 
+static std::wstring diagnostic_test_message;
+static void capture_diagnostic_test_message(uint32_t,const wchar_t* text) {
+    diagnostic_test_message=text ? text : L"";
+}
+
 namespace {
 using fsr4::kPasses;
 
 PFN_vkCmdPipelineBarrier2 command_pipeline_barrier2 = nullptr;
 PFN_vkGetBufferDeviceAddress get_buffer_device_address = nullptr;
+
+VkImageAspectFlags test_image_aspects(VkFormat format,bool copy=false) {
+    if(format==VK_FORMAT_D32_SFLOAT) return VK_IMAGE_ASPECT_DEPTH_BIT;
+    if(format==VK_FORMAT_D32_SFLOAT_S8_UINT)
+        return copy ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT;
+    return VK_IMAGE_ASPECT_COLOR_BIT;
+}
 
 void image_barrier(VkCommandBuffer command_buffer, VkImage image,
                    VkImageLayout old_layout, VkImageLayout new_layout,
@@ -218,7 +232,7 @@ Image create_image(VkPhysicalDevice physical_device,
     view_info.image = result.image;
     view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     view_info.format = format;
-    view_info.subresourceRange.aspectMask = format==VK_FORMAT_D32_SFLOAT_S8_UINT ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+    view_info.subresourceRange.aspectMask = test_image_aspects(format,true);
     view_info.subresourceRange.levelCount = 1;
     view_info.subresourceRange.layerCount = 1;
     check(vkCreateImageView(device, &view_info, nullptr, &result.view), "vkCreateImageView");
@@ -423,6 +437,13 @@ int main(int argc, char** argv) {
     const bool use_context = use_provider || (argc == 6 && std::string(argv[5]) == "--context");
     const bool external_exposure_test = std::getenv("FSR4_TEST_EXTERNAL_EXPOSURE") != nullptr;
     const bool half_exposure_test = std::getenv("FSR4_TEST_R16_EXPOSURE") != nullptr;
+    const bool depth_only_test=std::getenv("FSR4_TEST_DEPTH_ONLY")!=nullptr;
+    const std::string motion_storage=std::getenv("FSR4_TEST_MOTION_STORAGE") ? std::getenv("FSR4_TEST_MOTION_STORAGE") : "float";
+    if(motion_storage!="float" && motion_storage!="snorm16" && motion_storage!="snorm8") return 2;
+    const bool snorm16=motion_storage=="snorm16",snorm8=motion_storage=="snorm8";
+    const bool snorm_pattern=std::getenv("FSR4_TEST_SNORM_PATTERN")!=nullptr;
+    const int snorm_max=std::getenv("FSR4_TEST_SNORM_PATTERN") && std::string(std::getenv("FSR4_TEST_SNORM_PATTERN"))=="8" ? 127 : 32767;
+    if((snorm16 || snorm8) && (!snorm_pattern || (snorm8 ? 127 : 32767)!=snorm_max)) return 2;
     if(half_exposure_test && !external_exposure_test)return 2;
     const auto test_float=[](const char* name,float fallback) {
         if(const char* value=std::getenv(name)) {
@@ -821,6 +842,25 @@ int main(int argc, char** argv) {
         FrameInputs frame;
         generate_reference_frame(frame);
         if (nms_inputs) for (auto& depth : frame.depth) depth = 1.0f-depth;
+        const auto encode_test_motion=[&] {
+            if(!snorm_pattern)return;
+            for(size_t i=0;i<frame.motion.size();i+=2) {
+                const int x=int((i/2)%29)-14;
+                const int y=int((i/2)%23)-11;
+                const int values[]={i%62==0 ? -snorm_max-1 : x*(snorm_max==127 ? 1 : 19),
+                                    i%74==0 ? snorm_max : y*(snorm_max==127 ? 1 : 13)};
+                if(snorm16) {
+                    frame.motion[i]=static_cast<uint16_t>(static_cast<int16_t>(values[0]));
+                    frame.motion[i+1]=static_cast<uint16_t>(static_cast<int16_t>(values[1]));
+                } else if(snorm8) {
+                    const int8_t packed[]={static_cast<int8_t>(values[0]),static_cast<int8_t>(values[1]),0,127};
+                    std::memcpy(frame.motion.data()+i,packed,4);
+                } else {
+                    for(unsigned c=0;c<2;++c) frame.motion[i+c]=float_to_half(std::max(-1.f,float(values[c])/snorm_max));
+                }
+            }
+        };
+        encode_test_motion();
         std::vector<uint32_t> packed_color;
         if (game_formats) {
             // Positive finite test input: unsigned 11/10-bit float shares the
@@ -880,11 +920,11 @@ int main(int argc, char** argv) {
                                           VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
         Image& color = images.back();
         images.push_back(create_image(physical_device, device, kRenderWidth, kRenderHeight,
-                                      game_formats ? VK_FORMAT_D32_SFLOAT_S8_UINT : VK_FORMAT_R32_SFLOAT,
+                                      depth_only_test ? VK_FORMAT_D32_SFLOAT : (game_formats ? VK_FORMAT_D32_SFLOAT_S8_UINT : VK_FORMAT_R32_SFLOAT),
                                       VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT));
         Image& depth = images.back();
         images.push_back(create_image(physical_device, device, kRenderWidth, kRenderHeight,
-                                      VK_FORMAT_R16G16_SFLOAT,
+                                      snorm16 ? VK_FORMAT_R16G16_SNORM : (snorm8 ? VK_FORMAT_R8G8B8A8_SNORM : VK_FORMAT_R16G16_SFLOAT),
                                       VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT));
         Image& motion = images.back();
         images.push_back(create_image(physical_device, device, 1, 1, half_exposure_test ? VK_FORMAT_R16_SFLOAT : VK_FORMAT_R32_SFLOAT,
@@ -1038,7 +1078,7 @@ int main(int argc, char** argv) {
                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                           VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE,
                           VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                          image.format==VK_FORMAT_D32_SFLOAT_S8_UINT ? VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
+                          test_image_aspects(image.format));
         };
         for (const auto& image : images) transition_to_copy(image);
         VkClearColorValue zero{};
@@ -1061,7 +1101,7 @@ int main(int argc, char** argv) {
         const auto copy_to_image = [&](const Image& image, VkDeviceSize offset) {
             VkBufferImageCopy copy{};
             copy.bufferOffset = offset;
-            copy.imageSubresource.aspectMask = image.format==VK_FORMAT_D32_SFLOAT_S8_UINT ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+            copy.imageSubresource.aspectMask = test_image_aspects(image.format,true);
             copy.imageSubresource.layerCount = 1;
             copy.imageExtent = {image.width, image.height, 1};
             vkCmdCopyBufferToImage(command_buffer, staging.buffer, image.image,
@@ -1082,7 +1122,7 @@ int main(int argc, char** argv) {
                           VK_ACCESS_2_TRANSFER_WRITE_BIT,
                           VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                           VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
-                          image->format==VK_FORMAT_D32_SFLOAT_S8_UINT ? VK_IMAGE_ASPECT_DEPTH_BIT|VK_IMAGE_ASPECT_STENCIL_BIT : VK_IMAGE_ASPECT_COLOR_BIT);
+                          test_image_aspects(image->format));
         }
         for (const Image* image : {&reprojected, &output}) {
             image_barrier(command_buffer, image->image,
@@ -1176,6 +1216,15 @@ int main(int argc, char** argv) {
             d.color=resource(color,FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
             d.depth=resource(depth,FFX_API_SURFACE_FORMAT_R32_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
             d.motionVectors=resource(motion,FFX_API_SURFACE_FORMAT_R16G16_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
+            if(snorm16 || snorm8) d.motionVectors.description.format=FFX_API_SURFACE_FORMAT_R8G8B8A8_SNORM;
+            Fsr4VkDispatchNativeInputs native_inputs{};
+            if(std::getenv("FSR4_TEST_NATIVE_INPUTS")) {
+                native_inputs.header.type=FSR4VK_DISPATCH_DESC_TYPE_NATIVE_INPUTS;
+                native_inputs.motionFormat=motion.format;
+                if(std::getenv("FSR4_TEST_NATIVE_INPUTS_INVALID"))native_inputs.motionFormat=VK_FORMAT_R8G8B8A8_SNORM;
+                d.header.pNext=&native_inputs.header;
+            }
+            if(depth_only_test) d.depth.description.usage=FFX_API_RESOURCE_USAGE_DEPTHTARGET;
             d.exposure=resource(exposure_image,half_exposure_test ? FFX_API_SURFACE_FORMAT_R16_FLOAT : FFX_API_SURFACE_FORMAT_R32_FLOAT,FFX_API_RESOURCE_STATE_COMPUTE_READ);
             if (nms_inputs && !external_exposure_test) d.exposure={};
             d.output=resource(output,FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT,FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -1192,10 +1241,29 @@ int main(int argc, char** argv) {
             if (color_switch_test) d.reset=color_dispatch_index==0;
             if (temporal_test) d.motionVectorScale={float(kRenderWidth),float(kRenderHeight)};
             if (!checked_depth_rejection) {
+                if(std::getenv("FSR4_TEST_RESOURCE_DIAGNOSTICS")) {
+                    const auto saved_depth=d.depth,saved_motion=d.motionVectors;
+                    d.depth.resource=nullptr; d.motionVectors.resource=nullptr;
+                    if(ffxDispatch(&api_context,&d.header)!=FFX_API_RETURN_ERROR_PARAMETER ||
+                       diagnostic_test_message.find(L"missing depth resource")==std::wstring::npos ||
+                       diagnostic_test_message.find(L"missing motionVectors resource")==std::wstring::npos)
+                        throw std::runtime_error("missing-resource diagnostic incomplete");
+                    d.depth=saved_depth; d.motionVectors=saved_motion;
+                    d.depth.description.format=FFX_API_SURFACE_FORMAT_R16_UNORM;
+                    d.motionVectors.description.format=FFX_API_SURFACE_FORMAT_R8G8B8A8_SNORM;
+                    if(ffxDispatch(&api_context,&d.header)!=FFX_API_RETURN_ERROR_PARAMETER)
+                        throw std::runtime_error("incompatible-resource diagnostic accepted");
+                    for(const auto* part : {L"invalid depth resource",L"invalid motionVectors resource",
+                        L"R16_UNORM",L"R8G8B8A8_SNORM",L"accepted_formats=[R32_FLOAT",L"accepted_formats=[R16G16_FLOAT"})
+                        if(diagnostic_test_message.find(part)==std::wstring::npos)
+                            throw std::runtime_error("incompatible-resource diagnostic incomplete");
+                    d.depth=saved_depth; d.motionVectors=saved_motion;
+                    std::cout << "resource_diagnostics=missing-and-incompatible-depth-motion-passed\n";
+                }
                 const auto valid_usage=d.depth.description.usage;
-                d.depth.description.usage = FFX_API_RESOURCE_USAGE_DEPTHTARGET;
+                d.depth.description.usage = FFX_API_RESOURCE_USAGE_STENCILTARGET;
                 if (ffxDispatch(&api_context,&d.header)==FFX_API_RETURN_OK)
-                    throw std::runtime_error("ambiguous depth target was not rejected");
+                    throw std::runtime_error("stencil-only depth target was not rejected");
                 d.depth.description.usage = valid_usage;
                 if(external_exposure_test) {
                     const auto valid_exposure=d.exposure;
@@ -1298,7 +1366,16 @@ int main(int argc, char** argv) {
                     backend.header.pNext=&model_version.header;
                 }
                 ffxCreateContextDescUpscale create{};
+                if(std::getenv("FSR4_TEST_RESOURCE_DIAGNOSTICS")) create.fpMessage=capture_diagnostic_test_message;
                 create.header={FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE,&backend.header};
+                Fsr4VkCreateCooperativeMatrix coop{};
+                if(fsr4vk::cooperative_matrix_requested()) {
+                    coop.header={FSR4VK_CREATE_DESC_TYPE_COOPERATIVE_MATRIX,create.header.pNext};
+                    coop.getProperties=reinterpret_cast<PFN_vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR>(
+                        vkGetInstanceProcAddr(instance,"vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR"));
+                    coop.deviceFeaturesEnabled=VK_TRUE; // actual successful DeviceFeatures request above
+                    create.header.pNext=&coop.header;
+                }
                 create.maxRenderSize={max_render_width,max_render_height}; create.maxUpscaleSize={kOutputWidth,kOutputHeight};
                 if (nms_inputs) create.flags=FFX_UPSCALE_ENABLE_DEPTH_INVERTED | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
                 if (external_exposure_test) create.flags &= ~FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
@@ -1434,6 +1511,7 @@ int main(int argc, char** argv) {
                         }
                     }
                     generate_reference_frame(frame,frame_index,benchmark_frames!=0);
+                    encode_test_motion();
                     for (auto& z:frame.depth) z=1.0f-z;
                     const VkDeviceSize next_color_size=frame.color.size()*2,next_depth_size=frame.depth.size()*4;
                     std::memcpy(staging_bytes,frame.color.data(),next_color_size);
@@ -1443,11 +1521,11 @@ int main(int argc, char** argv) {
                         image_barrier(command_buffer,input->image,resize_input ? VK_IMAGE_LAYOUT_UNDEFINED :
                             (input==&color && frame_index==1 ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL),
                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,VK_ACCESS_2_MEMORY_READ_BIT,
-                            VK_PIPELINE_STAGE_2_COPY_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT);
+                            VK_PIPELINE_STAGE_2_COPY_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,test_image_aspects(input->format));
                     copy_to_image(color,0); copy_to_image(depth,next_color_size); copy_to_image(motion,next_color_size+next_depth_size);
                     for (const Image* input : {&color,&depth,&motion})
                         image_barrier(command_buffer,input->image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                            VK_PIPELINE_STAGE_2_COPY_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+                            VK_PIPELINE_STAGE_2_COPY_BIT,VK_ACCESS_2_TRANSFER_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,test_image_aspects(input->format));
                     if(external_exposure_test) {
                         upload_exposure(second_exposure);
                         image_barrier(command_buffer,exposure_image.image,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,

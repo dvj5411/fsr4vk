@@ -17,7 +17,7 @@ files = {
     'OptiScaler/amd_fidelityfx_upscaler_vk_debug.dll': args.provider_debug,
     'readme.txt': root / 'readme.txt',
     'LICENSES/AMD-FidelityFX-SDK-MIT.md': root / 'LICENSES/AMD-FidelityFX-SDK-MIT.md',
-    'LICENSES/OptiScaler-GPL-3.0.txt': root / 'LICENSES/OptiScaler-GPL-3.0.txt',
+    'LICENSES/GPL-3.0.txt': root / 'LICENSES/GPL-3.0.txt',
     'LICENSES/Zstandard-BSD.txt': root / 'LICENSES/Zstandard-BSD.txt',
 }
 for name, path in files.items():

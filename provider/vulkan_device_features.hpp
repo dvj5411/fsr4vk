@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include "cooperative-matrix.hpp"
 
 // Compatibility with the Vulkan 1.4.310 headers bundled with OptiScaler.
 #ifndef VK_VALVE_shader_mixed_float_dot_product
@@ -135,6 +136,8 @@ class DeviceFeatures
         return reinterpret_cast<VkBaseOutStructure*>(copy(*reinterpret_cast<const type*>(node)))
         switch (static_cast<int>(node->sType))
         {
+            FSR4_COPY(VkPhysicalDeviceCooperativeMatrixFeaturesKHR,
+                      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR);
             FSR4_COPY(VkPhysicalDeviceFeatures2, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
             FSR4_COPY(VkPhysicalDeviceVulkan11Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
             FSR4_COPY(VkPhysicalDeviceVulkan12Features, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
@@ -314,6 +317,10 @@ class DeviceFeatures
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES
         };
         VkPhysicalDeviceFeatures2 available { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+        const bool coop=cooperative_matrix_requested();
+        VkPhysicalDeviceCooperativeMatrixFeaturesKHR cooperative{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR};
+        VkPhysicalDeviceSubgroupSizeControlFeatures subgroupSize{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES};
+        VkPhysicalDeviceVulkanMemoryModelFeatures memorySupport{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES};
         VkBaseOutStructure* queryTail = reinterpret_cast<VkBaseOutStructure*>(&available);
         const auto appendQuery = [&queryTail](auto& feature)
         {
@@ -343,6 +350,11 @@ class DeviceFeatures
         appendQuery(derivatives);
         appendQuery(mixed);
         appendQuery(floatControls);
+        if(coop) {
+            appendQuery(cooperative);
+            if(!core13)appendQuery(subgroupSize);
+            if(!core12)appendQuery(memorySupport);
+        }
         query(physical, &available);
         std::vector<const char*> missingFeatures;
         const auto requireFeature = [&missingFeatures](VkBool32 availableFeature, const char* name)
@@ -351,6 +363,13 @@ class DeviceFeatures
                 missingFeatures.push_back(name);
         };
         requireFeature(available.features.shaderInt16, "shaderInt16");
+        if(coop) {
+            requireFeature(cooperative.cooperativeMatrix,"cooperativeMatrix (FSR4_VK_COOP_MAT=1)");
+            requireFeature(core13 ? v13.subgroupSizeControl : subgroupSize.subgroupSizeControl,"subgroupSizeControl");
+            requireFeature(core13 ? v13.computeFullSubgroups : subgroupSize.computeFullSubgroups,"computeFullSubgroups");
+            requireFeature(core12 ? v12.vulkanMemoryModel : memorySupport.vulkanMemoryModel,"vulkanMemoryModel");
+            requireFeature(core12 ? v12.vulkanMemoryModelDeviceScope : memorySupport.vulkanMemoryModelDeviceScope,"vulkanMemoryModelDeviceScope");
+        }
         requireFeature(available.features.shaderStorageImageReadWithoutFormat, "shaderStorageImageReadWithoutFormat");
         requireFeature(available.features.shaderStorageImageWriteWithoutFormat, "shaderStorageImageWriteWithoutFormat");
         requireFeature(core12 ? v12.shaderFloat16 : float16Int8.shaderFloat16, "shaderFloat16");
@@ -372,17 +391,6 @@ class DeviceFeatures
         const bool nativeMixedDot = supportsNativeMixedDot(physical, query, enumerate);
         if (nativeMixedDot)
             requireFeature(floatControls.shaderFloatControls2, "shaderFloatControls2");
-        if (!missingFeatures.empty())
-        {
-            std::string message = "missing FSR4 device feature(s): ";
-            for (size_t i = 0; i < missingFeatures.size(); ++i)
-            {
-                if (i)
-                    message += ", ";
-                message += missingFeatures[i];
-            }
-            throw std::runtime_error(message);
-        }
         uint32_t count = 0;
         if (enumerate(physical, nullptr, &count, nullptr) != VK_SUCCESS)
             throw std::runtime_error("extension count failed");
@@ -397,6 +405,11 @@ class DeviceFeatures
         std::vector<const char*> requiredExtensions { VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
                                                       VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME,
                                                       VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME };
+        if(coop) {
+            requiredExtensions.push_back(VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME);
+            if(!core13)requiredExtensions.push_back(VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME);
+            if(!core12)requiredExtensions.push_back(VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME);
+        }
         if (nativeMixedDot) {
             requiredExtensions.push_back(VK_VALVE_SHADER_MIXED_FLOAT_DOT_PRODUCT_EXTENSION_NAME);
             requiredExtensions.push_back(VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME);
@@ -414,14 +427,25 @@ class DeviceFeatures
             requiredExtensions.insert(requiredExtensions.end(), { VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
                                                                   VK_KHR_SHADER_INTEGER_DOT_PRODUCT_EXTENSION_NAME });
         }
+        std::vector<const char*> missingExtensions;
         for (auto* required : requiredExtensions)
         {
             if (std::none_of(availableExtensions.begin(), availableExtensions.end(),
                              [&](const auto& e) { return std::strcmp(e.extensionName, required) == 0; }))
-                throw std::runtime_error(std::string("missing extension: ") + required);
+                missingExtensions.push_back(required);
             if (std::none_of(extensions.begin(), extensions.end(),
                              [&](auto* e) { return std::strcmp(e, required) == 0; }))
                 extensions.push_back(required);
+        }
+        if(!missingFeatures.empty() || !missingExtensions.empty()) {
+            const auto list=[](const auto& names) {
+                std::string text;
+                for(const auto* name:names) { if(!text.empty()) text+=", "; text+=name; }
+                return text.empty() ? std::string("none") : text;
+            };
+            throw std::runtime_error("FSR4VK_ERROR_UNSUPPORTED_DEVICE_CAPABILITIES: unsupported feature bits=["+
+                list(missingFeatures)+"]; unavailable device extensions=["+list(missingExtensions)+
+                "]; these are physical GPU/driver capabilities, not disabled device bits. Enabling unsupported features cannot fix this");
         }
         info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
         info.ppEnabledExtensionNames = extensions.data();
@@ -502,7 +526,7 @@ class DeviceFeatures
                 deviceScope = supported.vulkanMemoryModelDeviceScope;
             }
             if (!deviceScope)
-                throw std::runtime_error("missing FSR4 device feature: vulkanMemoryModelDeviceScope");
+                throw std::runtime_error("FSR4VK_ERROR_UNSUPPORTED_DEVICE_CAPABILITIES: vulkanMemoryModelDeviceScope is unsupported but required because the host enabled vulkanMemoryModel; device-scope atomics require both bits");
             if (e12 && e12->vulkanMemoryModel)
                 e12->vulkanMemoryModelDeviceScope = VK_TRUE;
             if (memoryModel && memoryModel->vulkanMemoryModel)
@@ -563,6 +587,21 @@ class DeviceFeatures
             ensure<VkPhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE>(
                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MIXED_FLOAT_DOT_PRODUCT_FEATURES_VALVE)
                 ->shaderMixedFloatDotProductFloat16AccFloat32 = VK_TRUE;
+        if(coop) {
+            ensure<VkPhysicalDeviceCooperativeMatrixFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR)->cooperativeMatrix=VK_TRUE;
+            if(auto* s=find<VkPhysicalDeviceVulkan13Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES))
+                s->subgroupSizeControl=s->computeFullSubgroups=VK_TRUE;
+            else {
+                auto* extSize=ensure<VkPhysicalDeviceSubgroupSizeControlFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES);
+                extSize->subgroupSizeControl=extSize->computeFullSubgroups=VK_TRUE;
+            }
+            if(auto* m=find<VkPhysicalDeviceVulkan12Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES))
+                m->vulkanMemoryModel=m->vulkanMemoryModelDeviceScope=VK_TRUE;
+            else {
+                auto* extMemory=ensure<VkPhysicalDeviceVulkanMemoryModelFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES);
+                extMemory->vulkanMemoryModel=extMemory->vulkanMemoryModelDeviceScope=VK_TRUE;
+            }
+        }
         if (nativeMixedDot) {
             if (auto* e14 = find<VkPhysicalDeviceVulkan14Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES))
                 e14->shaderFloatControls2 = VK_TRUE;
