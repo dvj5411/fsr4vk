@@ -9,7 +9,6 @@
 #include "color-space.hpp"
 #include "buffer-memory-policy.hpp"
 #include "model11-row-bounds.hpp"
-#include "coopmat-rewrite.hpp"
 #include "../provider/vulkan_device_features.hpp"
 #include <algorithm>
 #include <cstring>
@@ -258,8 +257,6 @@ class QualityContext {
     bool nms_inputs = false;
     bool external_exposure = false;
     bool native_mixed_dot = false;
-    bool cooperative_matrix = false;
-    unsigned cooperative_blocks = 0;
     VkQueryPool profile_queries{};
     double timestamp_period = 0;
     std::string profile_path;
@@ -328,8 +325,7 @@ public:
     }
 private:
     VkPipeline create_pipeline(const std::vector<std::uint32_t>& original,const char* name) {
-        auto code=original;
-        const auto rewritten=cooperative_matrix ? fsr4coop::rewrite(code) : 0;
+        const auto& code=original;
         VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
         module_info.codeSize=code.size()*sizeof(std::uint32_t);
         module_info.pCode=code.data();
@@ -338,26 +334,17 @@ private:
         modules.push_back(module);
         VkPipelineShaderStageCreateInfo stage{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
         stage.stage=VK_SHADER_STAGE_COMPUTE_BIT; stage.module=module; stage.pName="main";
-        VkPipelineShaderStageRequiredSubgroupSizeCreateInfo subgroupSize{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_REQUIRED_SUBGROUP_SIZE_CREATE_INFO};
-        subgroupSize.requiredSubgroupSize=32;
-        if(rewritten) {
-            stage.pNext=&subgroupSize;
-            stage.flags|=VK_PIPELINE_SHADER_STAGE_CREATE_REQUIRE_FULL_SUBGROUPS_BIT;
-        }
         VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
         info.flags=VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         info.stage=stage; info.layout=pipeline_layout;
         VkPipeline pipeline{};
         check(vkCreateComputePipelines(device,VK_NULL_HANDLE,1,&info,nullptr,&pipeline),name);
         owned_pipelines.push_back(pipeline);
-        cooperative_blocks+=rewritten;
         return pipeline;
     }
 public:
-    unsigned cooperative_block_count() const { return cooperative_blocks; }
     const Buffer& initializer_allocation() const { return buffers.at(4); }
     const char* shader_backend() const {
-        if(cooperative_matrix)return "cooperative-matrix-int8 (eligible blocks; scalar boundary fallback)";
         return native_mixed_dot ? "native-mixed-dot" : "portable-int8";
     }
     QualityContext(const QualityContext&) = delete;
@@ -371,13 +358,12 @@ public:
                    uint32_t max_output_width,
                    uint32_t max_output_height,
                    uint32_t api_version,
-                   bool external_exposure_input = false, bool use_fsr411 = false, bool use_cooperative_matrix = false)
+                   bool external_exposure_input = false, bool use_fsr411 = false)
         : physical_device(physical), device(logical),
           get_device_proc_addr(get_device_proc_addr),
           dispatch(logical, get_device_proc_addr, api_version), nms_inputs(nms),
           external_exposure(external_exposure_input) {
         fsr411=use_fsr411;
-        cooperative_matrix=use_cooperative_matrix;
         if(fsr411 && !nms) throw std::invalid_argument("4.1.1 requires the general layout");
         if(max_output_width>1920 || max_output_height>1080) { model_capacity_width=3840;model_capacity_height=2160; }
       try {
@@ -530,8 +516,6 @@ public:
             pipelines.push_back(create_pipeline(code,spd ? "auto_exposure" : fsr411 ? "fsr411" : kPasses[index].name));
         }
         color_pipelines[0]={pipelines[0],pipelines[fsr411 ? 26 : 13]};
-        if(cooperative_matrix && !cooperative_blocks)
-            throw std::runtime_error("FSR4_VK_COOP_MAT=1: model bundle contains no eligible cooperative-matrix blocks");
 
 
         auto get_layout_size = reinterpret_cast<PFN_vkGetDescriptorSetLayoutSizeEXT>(

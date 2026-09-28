@@ -50,7 +50,7 @@ Update: the new `fsr4vk-provider-308-3.log` confirms depth-only usage and
 ambiguous SNORM motion metadata. v0.4.2 supports depth-only D32 and native RG16
 SNORM sampling. Its updated OptiScaler supplies the original motion VkFormat
 per dispatch; the provider log identifies `source=host-native-metadata`.
-See [the optional host integration](COOPERATIVE-MATRIX.md). Older hosts still
+The bundled OptiScaler includes this native-input handoff. Older hosts still
 need the explicit `FSR4_VK_MOTION_FORMAT=R16G16_SNORM` override for this alias.
 
 The checked-in OptiScaler source maps `VK_FORMAT_R16G16_UNORM/SNORM` to FFX

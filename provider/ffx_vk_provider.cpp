@@ -19,7 +19,6 @@
 #include "device-feature-diagnostics.hpp"
 #include "input-formats.hpp"
 #include "ffx_vk_native_inputs.h"
-#include "ffx_vk_cooperative_matrix.h"
 
 #include <algorithm>
 #include <cmath>
@@ -88,7 +87,6 @@ struct ProviderContext {
     uint64_t dispatch_attempts = 0;
     uint64_t dispatch_successes = 0;
     VkFormat motion_override = VK_FORMAT_UNDEFINED;
-    bool cooperative_matrix = false;
 };
 
 constexpr const char* presetName(std::uint32_t id) noexcept {
@@ -434,21 +432,6 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
         }
         provider->diagnostic_path=diagnostic_path(assets);
         diagnostic(*provider,"diagnostics_schema=2 provider_build=" __DATE__ " " __TIME__);
-        provider->cooperative_matrix=fsr4vk::cooperative_matrix_requested();
-        if(provider->cooperative_matrix) {
-            const Fsr4VkCreateCooperativeMatrix* coop=nullptr;
-            unsigned count=0;
-            for(auto* node=header;node;node=node->pNext) {
-                if(++count>64)throw std::invalid_argument("context extension chain is cyclic or too long");
-                if(node->type==FSR4VK_CREATE_DESC_TYPE_COOPERATIVE_MATRIX) {
-                    if(coop)throw std::invalid_argument("duplicate cooperative matrix descriptor");
-                    coop=reinterpret_cast<const Fsr4VkCreateCooperativeMatrix*>(node);
-                }
-            }
-            fsr4vk::validate_cooperative_matrix(provider->physicalDevice,coop ? coop->getProperties : nullptr,
-                                              coop ? coop->deviceFeaturesEnabled : VK_FALSE);
-            diagnostic(*provider,"cooperative matrix requested=1 configuration=16x16x16 SINT8/SINT32 wave32; host confirms device enablement; hardware acceleration and speedup are NOT inferred from extension support");
-        }
         provider->motion_override=fsr4vk::motion_format_override(std::getenv("FSR4_VK_MOTION_FORMAT"));
         if(provider->motion_override!=VK_FORMAT_UNDEFINED)
             diagnostic(*provider,"explicit motion format override=VK_FORMAT_R16G16_SNORM; applies only to FFX R8G8B8A8_SNORM metadata; original VkImage format must match; no automatic alias guessing");
@@ -740,7 +723,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                 provider->maxRenderSize.width,provider->maxRenderSize.height,
                 provider->maxUpscaleSize.width,provider->maxUpscaleSize.height,
                 provider->apiVersion,
-                (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0,provider->version==kVersion411Id,provider->cooperative_matrix);
+                (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0,provider->version==kVersion411Id);
             core=created.get();
             provider->cores[selected_preset]=std::move(created);
             if(!provider->diagnostic_path.empty()) {
@@ -754,9 +737,6 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
             diagnostic(*provider,"model ready="+selected_preset+" cpu_build_ms="+
                 std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::steady_clock::now()-build_started).count()));
-            if(provider->cooperative_matrix)
-                diagnostic(*provider,"cooperative_matrix rewritten_blocks="+std::to_string(core->cooperative_block_count())+
-                    " scope=subgroup wave_size=32; unmatched blocks and partial subgroups retain scalar dots");
         }
         stage="color-space pipeline selection";
         const bool color_changed=core->set_color_space(color_space);

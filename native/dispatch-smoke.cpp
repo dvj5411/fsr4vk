@@ -29,7 +29,6 @@ struct CreateBackendVkDesc {
 #endif
 
 #include "../provider/ffx_vk_native_inputs.h"
-#include "../provider/ffx_vk_cooperative_matrix.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -1368,14 +1367,6 @@ int main(int argc, char** argv) {
                 ffxCreateContextDescUpscale create{};
                 if(std::getenv("FSR4_TEST_RESOURCE_DIAGNOSTICS")) create.fpMessage=capture_diagnostic_test_message;
                 create.header={FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE,&backend.header};
-                Fsr4VkCreateCooperativeMatrix coop{};
-                if(fsr4vk::cooperative_matrix_requested()) {
-                    coop.header={FSR4VK_CREATE_DESC_TYPE_COOPERATIVE_MATRIX,create.header.pNext};
-                    coop.getProperties=reinterpret_cast<PFN_vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR>(
-                        vkGetInstanceProcAddr(instance,"vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR"));
-                    coop.deviceFeaturesEnabled=VK_TRUE; // actual successful DeviceFeatures request above
-                    create.header.pNext=&coop.header;
-                }
                 create.maxRenderSize={max_render_width,max_render_height}; create.maxUpscaleSize={kOutputWidth,kOutputHeight};
                 if (nms_inputs) create.flags=FFX_UPSCALE_ENABLE_DEPTH_INVERTED | FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;
                 if (external_exposure_test) create.flags &= ~FFX_UPSCALE_ENABLE_AUTO_EXPOSURE;

@@ -6,7 +6,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include "cooperative-matrix.hpp"
 
 // Compatibility with the Vulkan 1.4.310 headers bundled with OptiScaler.
 #ifndef VK_VALVE_shader_mixed_float_dot_product
@@ -317,10 +316,6 @@ class DeviceFeatures
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES
         };
         VkPhysicalDeviceFeatures2 available { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
-        const bool coop=cooperative_matrix_requested();
-        VkPhysicalDeviceCooperativeMatrixFeaturesKHR cooperative{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR};
-        VkPhysicalDeviceSubgroupSizeControlFeatures subgroupSize{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES};
-        VkPhysicalDeviceVulkanMemoryModelFeatures memorySupport{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES};
         VkBaseOutStructure* queryTail = reinterpret_cast<VkBaseOutStructure*>(&available);
         const auto appendQuery = [&queryTail](auto& feature)
         {
@@ -350,11 +345,6 @@ class DeviceFeatures
         appendQuery(derivatives);
         appendQuery(mixed);
         appendQuery(floatControls);
-        if(coop) {
-            appendQuery(cooperative);
-            if(!core13)appendQuery(subgroupSize);
-            if(!core12)appendQuery(memorySupport);
-        }
         query(physical, &available);
         std::vector<const char*> missingFeatures;
         const auto requireFeature = [&missingFeatures](VkBool32 availableFeature, const char* name)
@@ -363,13 +353,6 @@ class DeviceFeatures
                 missingFeatures.push_back(name);
         };
         requireFeature(available.features.shaderInt16, "shaderInt16");
-        if(coop) {
-            requireFeature(cooperative.cooperativeMatrix,"cooperativeMatrix (FSR4_VK_COOP_MAT=1)");
-            requireFeature(core13 ? v13.subgroupSizeControl : subgroupSize.subgroupSizeControl,"subgroupSizeControl");
-            requireFeature(core13 ? v13.computeFullSubgroups : subgroupSize.computeFullSubgroups,"computeFullSubgroups");
-            requireFeature(core12 ? v12.vulkanMemoryModel : memorySupport.vulkanMemoryModel,"vulkanMemoryModel");
-            requireFeature(core12 ? v12.vulkanMemoryModelDeviceScope : memorySupport.vulkanMemoryModelDeviceScope,"vulkanMemoryModelDeviceScope");
-        }
         requireFeature(available.features.shaderStorageImageReadWithoutFormat, "shaderStorageImageReadWithoutFormat");
         requireFeature(available.features.shaderStorageImageWriteWithoutFormat, "shaderStorageImageWriteWithoutFormat");
         requireFeature(core12 ? v12.shaderFloat16 : float16Int8.shaderFloat16, "shaderFloat16");
@@ -405,11 +388,6 @@ class DeviceFeatures
         std::vector<const char*> requiredExtensions { VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,
                                                       VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME,
                                                       VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME };
-        if(coop) {
-            requiredExtensions.push_back(VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME);
-            if(!core13)requiredExtensions.push_back(VK_EXT_SUBGROUP_SIZE_CONTROL_EXTENSION_NAME);
-            if(!core12)requiredExtensions.push_back(VK_KHR_VULKAN_MEMORY_MODEL_EXTENSION_NAME);
-        }
         if (nativeMixedDot) {
             requiredExtensions.push_back(VK_VALVE_SHADER_MIXED_FLOAT_DOT_PRODUCT_EXTENSION_NAME);
             requiredExtensions.push_back(VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME);
@@ -587,21 +565,6 @@ class DeviceFeatures
             ensure<VkPhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE>(
                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MIXED_FLOAT_DOT_PRODUCT_FEATURES_VALVE)
                 ->shaderMixedFloatDotProductFloat16AccFloat32 = VK_TRUE;
-        if(coop) {
-            ensure<VkPhysicalDeviceCooperativeMatrixFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR)->cooperativeMatrix=VK_TRUE;
-            if(auto* s=find<VkPhysicalDeviceVulkan13Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES))
-                s->subgroupSizeControl=s->computeFullSubgroups=VK_TRUE;
-            else {
-                auto* extSize=ensure<VkPhysicalDeviceSubgroupSizeControlFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES);
-                extSize->subgroupSizeControl=extSize->computeFullSubgroups=VK_TRUE;
-            }
-            if(auto* m=find<VkPhysicalDeviceVulkan12Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES))
-                m->vulkanMemoryModel=m->vulkanMemoryModelDeviceScope=VK_TRUE;
-            else {
-                auto* extMemory=ensure<VkPhysicalDeviceVulkanMemoryModelFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_MEMORY_MODEL_FEATURES);
-                extMemory->vulkanMemoryModel=extMemory->vulkanMemoryModelDeviceScope=VK_TRUE;
-            }
-        }
         if (nativeMixedDot) {
             if (auto* e14 = find<VkPhysicalDeviceVulkan14Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES))
                 e14->shaderFloatControls2 = VK_TRUE;

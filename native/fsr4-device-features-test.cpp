@@ -186,25 +186,19 @@ int main() {
     VkDeviceCreateInfo empty{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     fsr4vk::DeviceFeatures off(reinterpret_cast<VkPhysicalDevice>(1),empty,api,query_features,enumerate_extensions);
     require(!has_extension(off.get(),VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME),"default path unexpectedly requests cooperative matrices");
-    setenv("FSR4_VK_COOP_MAT","1",1);
-    expose_cooperative=false;
-    bool rejected=false;
-    try { fsr4vk::DeviceFeatures unsupported(reinterpret_cast<VkPhysicalDevice>(1),empty,api,query_features,enumerate_extensions); }
-    catch(const std::runtime_error& e) { rejected=std::strstr(e.what(),"cooperativeMatrix")!=nullptr; }
-    require(rejected,"missing cooperative feature not diagnosed");
-    expose_cooperative=true;
-    fsr4vk::DeviceFeatures on(reinterpret_cast<VkPhysicalDevice>(1),empty,api,query_features,enumerate_extensions);
-    const auto* matrix=find_structure<VkPhysicalDeviceCooperativeMatrixFeaturesKHR>(on.get(),VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR);
-    require(matrix && matrix->cooperativeMatrix && has_extension(on.get(),VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME),"cooperative opt-in not enabled");
-    require(empty.pNext==nullptr && empty.enabledExtensionCount==0,"cooperative preparation mutated caller");
+    // The hotfix ignores all old values, including inherited/invalid ones.
+    for(const char* value : {"1","0","","yes"}) {
+      setenv("FSR4_VK_COOP_MAT",value,1);
+      for(bool supported : {false,true}) {
+        expose_cooperative=supported;
+        fsr4vk::DeviceFeatures disabled(reinterpret_cast<VkPhysicalDevice>(1),empty,api,query_features,enumerate_extensions);
+        require(!find_structure<VkPhysicalDeviceCooperativeMatrixFeaturesKHR>(disabled.get(),VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR),"disabled path added cooperative feature");
+        require(!has_extension(disabled.get(),VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME),"disabled path added cooperative extension");
+        require(empty.pNext==nullptr && empty.enabledExtensionCount==0,"disabled preparation mutated caller");
+      }
+    }
     unsetenv("FSR4_VK_COOP_MAT");
   }
-  setenv("FSR4_VK_COOP_MAT","yes",1);
-  bool bad_option=false;
-  try { (void)fsr4vk::cooperative_matrix_requested(); } catch(const std::invalid_argument&) { bad_option=true; }
-  require(bad_option,"invalid cooperative option accepted");
-  setenv("FSR4_VK_COOP_MAT","0",1);
-  require(!fsr4vk::cooperative_matrix_requested(),"explicit cooperative disable ignored");
   unsetenv("FSR4_VK_COOP_MAT");
   // Reproduce every sType from the RDR2 benchmark's post-OptiScaler chain.
   for (bool native : {false, true}) {

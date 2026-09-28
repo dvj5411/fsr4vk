@@ -10,4 +10,3 @@ Installation steps:
 Notes:
 - If there are any problems, please add into the launch args "FSR4_VK_LOG=1".
 - I am currently testing if the release version has any performance regressions compared to the debug build! If you have some spare time, please feel free to test both.
-Experimental Cooperative Matrix path requires the following launch arguments on Steam: "FSR4_VK_COOP_MAT=1 %command%"
