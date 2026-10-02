@@ -164,6 +164,16 @@ void require(bool value, const char *message) {
 } // namespace
 
 int main() {
+  // Optional native capabilities must not prevent the mandatory portable path.
+  available_extensions={VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME,VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME,
+      VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,VK_VALVE_SHADER_MIXED_FLOAT_DOT_PRODUCT_EXTENSION_NAME,
+      VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME};
+  expose_float_controls2=false;
+  require(!fsr4vk::supportsNativeMixedDot(reinterpret_cast<VkPhysicalDevice>(1),query_features,enumerate_extensions),"incomplete native backend selected");
+  VkDeviceCreateInfo portableSource{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+  fsr4vk::DeviceFeatures portableIncomplete(reinterpret_cast<VkPhysicalDevice>(1),portableSource,VK_API_VERSION_1_3,query_features,enumerate_extensions);
+  require(!has_extension(portableIncomplete.get(),VK_VALVE_SHADER_MIXED_FLOAT_DOT_PRODUCT_EXTENSION_NAME),"optional incomplete native requirements added");
+  expose_float_controls2=true;
   unsetenv("FSR4_VK_COOP_MAT");
   available_extensions = {
       VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME,

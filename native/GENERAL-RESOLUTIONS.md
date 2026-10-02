@@ -8,14 +8,17 @@ retired fixed 720p -> 1080p Quality-only runtime path.
 - Input and output dimensions are integers, at least 64 on each axis.
 - Output is at most 3840x2160; input must not exceed output on either axis.
 - Equal input/output is supported (FSRAA). Non-preset and odd dimensions are
-  accepted; internal history and dispatch extents are rounded up to 8 pixels.
+  accepted. 4.0.2 pads internal extents; 4.1.1 pads neural capacity but preserves
+  exact image dimensions. Odd final borders require the separate oracle gate
+  described in the audit; do not infer coverage from a zero-cleared smoke output.
 - Capacity-specific shader bundles cover up to 1920x1080 and up to 3840x2160.
   Presets are Native AA, Quality, Balanced, Performance, Ultra Performance, and
   preset 4 (DRS). Set `FFX_UPSCALE_ENABLE_DYNAMIC_RESOLUTION` at context creation
   to select DRS and retain it across render-size changes. Without this flag,
   the existing ratio-based model selection applies.
-- The current captured permutation requires inverted depth and auto exposure,
-  low-resolution motion vectors, no sharpening, and no optional masks. Existing
+- The current permutation requires inverted depth and low-resolution motion
+  vectors. Auto or R16/R32 external exposure is supported. The provider does not
+  sharpen (host RCAS is independent), and optional masks are ignored with a warning. Existing
   Vulkan device requirements and single-queue/lifetime rules still apply.
 - Invalid or non-positive game pre-exposure values are treated as neutral 1.0;
   a preset change must not fail solely because that transient value is zero.
@@ -55,6 +58,10 @@ A non-embedded DLL searches for
 `fsr4-vulkan-assets/general/` beside itself.
 Model/shader assets belong to this private research archive, not the independent
 clean provider framework or the public OptiScaler fork.
+
+This is the 4.0.2 bundle layout. 4.1.1 additionally uses `fsr411/general` and
+its color variants, with 28 passes. See the generated embedding manifest for
+current payload/resource counts rather than historical counts in validation notes.
 
 ## Reproduction
 

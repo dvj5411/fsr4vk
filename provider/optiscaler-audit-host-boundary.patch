@@ -1,0 +1,294 @@
+diff --git a/OptiScaler/hooks/Vulkan_Hooks.cpp b/OptiScaler/hooks/Vulkan_Hooks.cpp
+index f67bc055..1baa5dd3 100644
+--- a/OptiScaler/hooks/Vulkan_Hooks.cpp
++++ b/OptiScaler/hooks/Vulkan_Hooks.cpp
+@@ -7,6 +7,8 @@
+ #include <SysUtils.h>
+ 
+ #include <inputs/FfxApi_Vk_DeviceRequirements.h>
++#include <inputs/enabled-device-state.hpp>
++#include <upscalers/ffx/ffx_vk_create_device_features.h>
+ #include <proxies/FfxApi_Proxy.h>
+ 
+ #include <menu/menu_overlay_vk.h>
+@@ -36,6 +38,25 @@ static HWND _hwnd = nullptr;
+ static std::mutex _vkApiVersionMutex;
+ static std::unordered_map<VkInstance, uint32_t> _instanceApiVersions;
+ static std::unordered_map<VkPhysicalDevice, VkInstance> _physicalDeviceInstances;
++struct CreatedDeviceFeatures
++{
++    VkPhysicalDevice physical;
++    uint32_t flags, apiVersion, queueFamilyIndex;
++};
++static std::unordered_map<VkDevice, CreatedDeviceFeatures> _createdDeviceFeatures;
++
++bool VulkanHooks::GetCreatedDeviceFeatures(VkDevice device, uint32_t& flags, uint32_t& apiVersion,
++                                           uint32_t& queueFamilyIndex)
++{
++    std::scoped_lock lock(_vkApiVersionMutex);
++    const auto found = _createdDeviceFeatures.find(device);
++    if (found == _createdDeviceFeatures.end())
++        return false;
++    flags = found->second.flags;
++    apiVersion = found->second.apiVersion;
++    queueFamilyIndex = found->second.queueFamilyIndex;
++    return true;
++}
+ 
+ static std::mutex _vkPresentMutex;
+ 
+@@ -176,6 +197,14 @@ static uint32_t GetPhysicalDeviceApiVersion(VkPhysicalDevice physicalDevice, VkI
+ static void UntrackInstance(VkInstance instance)
+ {
+     std::scoped_lock lock(_vkApiVersionMutex);
++    for (auto it = _createdDeviceFeatures.begin(); it != _createdDeviceFeatures.end();)
++    {
++        const auto owner = _physicalDeviceInstances.find(it->second.physical);
++        if (owner != _physicalDeviceInstances.end() && owner->second == instance)
++            it = _createdDeviceFeatures.erase(it);
++        else
++            ++it;
++    }
+     _instanceApiVersions.erase(instance);
+ 
+     for (auto it = _physicalDeviceInstances.begin(); it != _physicalDeviceInstances.end();)
+@@ -392,6 +421,27 @@ static VkResult hkvkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevice
+             }
+         }
+         result = o_vkCreateDevice(physicalDevice, deviceCreateInfo, pAllocator, pDevice);
++        if (result == VK_SUCCESS)
++        {
++            try
++            {
++                const auto enabled = fsr4vk::read_enabled_device_state(*deviceCreateInfo, requestedApiVersion);
++                const uint32_t flags = (enabled.robust_buffer_access ? FSR4VK_DEVICE_ROBUST_BUFFER_ACCESS : 0u) |
++                                       (enabled.native_mixed_dot ? FSR4VK_DEVICE_NATIVE_MIXED_DOT : 0u);
++                std::scoped_lock lock(_vkApiVersionMutex);
++                // Multiple created families do not identify the family of a
++                // later command buffer; leave optional profiling unknown.
++                const uint32_t queueFamily = deviceCreateInfo->queueCreateInfoCount == 1
++                                                 ? deviceCreateInfo->pQueueCreateInfos[0].queueFamilyIndex
++                                                 : UINT32_MAX;
++                _createdDeviceFeatures.insert_or_assign(
++                    *pDevice, CreatedDeviceFeatures { physicalDevice, flags, requestedApiVersion, queueFamily });
++            }
++            catch (...)
++            {
++                LOG_WARN("Unable to snapshot successful Vulkan device features; optional provider handoff unavailable");
++            }
++        }
+ 
+         if (providerRequirements.token)
+         {
+diff --git a/OptiScaler/hooks/Vulkan_Hooks.h b/OptiScaler/hooks/Vulkan_Hooks.h
+index a05a6fcd..0544062e 100644
+--- a/OptiScaler/hooks/Vulkan_Hooks.h
++++ b/OptiScaler/hooks/Vulkan_Hooks.h
+@@ -10,4 +10,6 @@ class VulkanHooks
+ 
+     static void Hook(HMODULE vulkan1);
+     static void Unhook();
++    static bool GetCreatedDeviceFeatures(VkDevice device, uint32_t& flags, uint32_t& apiVersion,
++                                         uint32_t& queueFamilyIndex);
+ };
+diff --git a/OptiScaler/inputs/enabled-device-state.hpp b/OptiScaler/inputs/enabled-device-state.hpp
+new file mode 100644
+index 00000000..1aeae107
+--- /dev/null
++++ b/OptiScaler/inputs/enabled-device-state.hpp
+@@ -0,0 +1,55 @@
++#pragma once
++#include <vulkan/vulkan.h>
++#include <cstring>
++#include <stdexcept>
++
++namespace fsr4vk
++{
++struct EnabledDeviceState
++{
++    bool robust_buffer_access = false;
++    bool native_mixed_dot = false;
++};
++// Read the final create-info while owned pNext storage is still alive. This is
++// enablement evidence, unlike vkGetPhysicalDeviceFeatures2 support queries.
++inline EnabledDeviceState read_enabled_device_state(const VkDeviceCreateInfo& info, uint32_t api)
++{
++    EnabledDeviceState result;
++    result.robust_buffer_access = info.pEnabledFeatures && info.pEnabledFeatures->robustBufferAccess;
++    bool mixed = false, controls = false;
++    unsigned count = 0;
++    for (auto* node = static_cast<const VkBaseInStructure*>(info.pNext); node; node = node->pNext)
++    {
++        if (++count > 64)
++            throw std::invalid_argument("enabled device chain cyclic or too long");
++        if (node->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2)
++            result.robust_buffer_access =
++                reinterpret_cast<const VkPhysicalDeviceFeatures2*>(node)->features.robustBufferAccess;
++        // Only the first boolean is needed. Copy its Khronos ABI position so
++        // older Vulkan headers need not declare the full new VALVE structure.
++        if (static_cast<int>(node->sType) == 1000673000)
++        {
++            VkBool32 value {};
++            std::memcpy(&value, reinterpret_cast<const char*>(node) + sizeof(VkBaseInStructure), sizeof(value));
++            mixed = value == VK_TRUE;
++        }
++        if (node->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT_CONTROLS_2_FEATURES_KHR)
++            controls =
++                reinterpret_cast<const VkPhysicalDeviceShaderFloatControls2FeaturesKHR*>(node)->shaderFloatControls2;
++#if defined(VK_VERSION_1_4)
++        if (node->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES)
++            controls = reinterpret_cast<const VkPhysicalDeviceVulkan14Features*>(node)->shaderFloatControls2;
++#endif
++    }
++    const auto extension = [&](const char* name)
++    {
++        for (uint32_t i = 0; i < info.enabledExtensionCount; ++i)
++            if (std::strcmp(info.ppEnabledExtensionNames[i], name) == 0)
++                return true;
++        return false;
++    };
++    result.native_mixed_dot = mixed && controls && extension("VK_VALVE_shader_mixed_float_dot_product") &&
++                              (api >= VK_API_VERSION_1_4 || extension("VK_KHR_shader_float_controls2"));
++    return result;
++}
++} // namespace fsr4vk
+diff --git a/OptiScaler/upscalers/ffx/FFXFeature_Vk.cpp b/OptiScaler/upscalers/ffx/FFXFeature_Vk.cpp
+index db61c2e1..6cf05922 100644
+--- a/OptiScaler/upscalers/ffx/FFXFeature_Vk.cpp
++++ b/OptiScaler/upscalers/ffx/FFXFeature_Vk.cpp
+@@ -4,7 +4,10 @@
+ #include <proxies/FfxApi_Proxy.h>
+ #include "FFXFeature_Vk.h"
+ #include "FFXVkPresetReporting.h"
++#include "FFXVkInputReads.h"
+ #include "ffx_vk_native_inputs.h"
++#include "ffx_vk_create_device_features.h"
++#include <hooks/Vulkan_Hooks.h>
+ #include "nvsdk_ngx_vk.h"
+ #include "MathUtils.h"
+ 
+@@ -206,6 +209,18 @@ bool FFXFeatureVk::InitFFX(const NVSDK_NGX_Parameter* InParameters)
+         _nativeInputsSupported =
+             FfxApiProxy::VULKAN_Query()(nullptr, &nativeQuery.header) == FFX_API_RETURN_OK && nativeQuery.version == 1;
+ 
++        Fsr4VkQueryDeviceFeatures deviceQuery {};
++        deviceQuery.header.type = FSR4VK_QUERY_DESC_TYPE_DEVICE_FEATURES;
++        Fsr4VkCreateDeviceFeatures enabledDevice {};
++        if (FfxApiProxy::VULKAN_Query()(nullptr, &deviceQuery.header) == FFX_API_RETURN_OK &&
++            deviceQuery.version == 1 &&
++            VulkanHooks::GetCreatedDeviceFeatures(Device, enabledDevice.enabledFlags, enabledDevice.apiVersion,
++                                                  enabledDevice.queueFamilyIndex))
++        {
++            enabledDevice.header = { FSR4VK_CREATE_DESC_TYPE_DEVICE_FEATURES, backendDesc.header.pNext };
++            backendDesc.header.pNext = &enabledDevice.header;
++        }
++
+         LOG_DEBUG("_createContext!");
+         auto ret = FfxApiProxy::VULKAN_CreateContext()(&_context, &_contextDesc.header, NULL);
+ 
+@@ -280,8 +295,7 @@ bool FFXFeatureVk::EvaluateInternal(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Param
+     InParameters->Get(NVSDK_NGX_Parameter_Jitter_Offset_X, &params.jitterOffset.x);
+     InParameters->Get(NVSDK_NGX_Parameter_Jitter_Offset_Y, &params.jitterOffset.y);
+ 
+-    unsigned int reset;
+-    InParameters->Get(NVSDK_NGX_Parameter_Reset, &reset);
++    const auto reset = FFXVkInputReads::Optional(InParameters, NVSDK_NGX_Parameter_Reset, NVSDK_NGX_Result_Success, 0u);
+     params.reset = (reset == 1);
+ 
+     GetRenderResolution(InParameters, &params.renderSize.width, &params.renderSize.height);
+@@ -290,10 +304,8 @@ bool FFXFeatureVk::EvaluateInternal(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Param
+ 
+     params.commandList = InCmdBuffer;
+ 
+-    NVSDK_NGX_Resource_VK* paramColor;
+-    InParameters->Get(NVSDK_NGX_Parameter_Color, (void**) &paramColor);
+-
+-    if (paramColor)
++    NVSDK_NGX_Resource_VK* paramColor = nullptr;
++    if (FFXVkInputReads::Required(InParameters, NVSDK_NGX_Parameter_Color, NVSDK_NGX_Result_Success, paramColor))
+     {
+         LOG_DEBUG("Color exist..");
+ 
+@@ -307,10 +319,9 @@ bool FFXFeatureVk::EvaluateInternal(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Param
+         return false;
+     }
+ 
+-    NVSDK_NGX_Resource_VK* paramVelocity;
+-    InParameters->Get(NVSDK_NGX_Parameter_MotionVectors, (void**) &paramVelocity);
+-
+-    if (paramVelocity)
++    NVSDK_NGX_Resource_VK* paramVelocity = nullptr;
++    if (FFXVkInputReads::Required(InParameters, NVSDK_NGX_Parameter_MotionVectors, NVSDK_NGX_Result_Success,
++                                  paramVelocity))
+     {
+         LOG_DEBUG("MotionVectors exist..");
+ 
+@@ -330,10 +341,8 @@ bool FFXFeatureVk::EvaluateInternal(VkCommandBuffer InCmdBuffer, NVSDK_NGX_Param
+         return false;
+     }
+ 
+-    NVSDK_NGX_Resource_VK* paramOutput;
+-    InParameters->Get(NVSDK_NGX_Parameter_Output, (void**) &paramOutput);
+-
+-    if (paramOutput)
++    NVSDK_NGX_Resource_VK* paramOutput = nullptr;
++    if (FFXVkInputReads::Required(InParameters, NVSDK_NGX_Parameter_Output, NVSDK_NGX_Result_Success, paramOutput))
+     {
+         LOG_DEBUG("Output exist..");
+ 
+diff --git a/OptiScaler/upscalers/ffx/FFXVkInputReads.h b/OptiScaler/upscalers/ffx/FFXVkInputReads.h
+new file mode 100644
+index 00000000..402f4b71
+--- /dev/null
++++ b/OptiScaler/upscalers/ffx/FFXVkInputReads.h
+@@ -0,0 +1,21 @@
++#pragma once
++namespace FFXVkInputReads
++{
++template <class Parameters, class Key, class Result, class Resource>
++bool Required(Parameters* parameters, Key key, Result success, Resource*& output)
++{
++    output = nullptr;
++    if (parameters->Get(key, reinterpret_cast<void**>(&output)) != success)
++    {
++        output = nullptr;
++        return false;
++    }
++    return output != nullptr;
++}
++template <class Parameters, class Key, class Result, class Value>
++Value Optional(Parameters* parameters, Key key, Result success, Value fallback)
++{
++    Value value = fallback;
++    return parameters->Get(key, &value) == success ? value : fallback;
++}
++} // namespace FFXVkInputReads
+diff --git a/OptiScaler/upscalers/ffx/ffx_vk_create_device_features.h b/OptiScaler/upscalers/ffx/ffx_vk_create_device_features.h
+new file mode 100644
+index 00000000..308b60bf
+--- /dev/null
++++ b/OptiScaler/upscalers/ffx/ffx_vk_create_device_features.h
+@@ -0,0 +1,23 @@
++#pragma once
++#include <cstdint>
++
++// Optional snapshot of the *successful* VkDeviceCreateInfo. Physical support
++// is not logical enablement. Include ffx_api.h first; no Vulkan ABI dependency.
++constexpr ffxStructType_t FSR4VK_QUERY_DESC_TYPE_DEVICE_FEATURES = 0x4653523444455651ull;
++constexpr ffxStructType_t FSR4VK_CREATE_DESC_TYPE_DEVICE_FEATURES = 0x4653523444455643ull;
++constexpr std::uint32_t FSR4VK_DEVICE_ROBUST_BUFFER_ACCESS = 1u;
++constexpr std::uint32_t FSR4VK_DEVICE_NATIVE_MIXED_DOT = 2u;
++struct Fsr4VkQueryDeviceFeatures
++{
++    ffxQueryDescHeader header;
++    std::uint32_t version; // output: 1 supports the create descriptor below
++};
++struct Fsr4VkCreateDeviceFeatures
++{
++    ffxCreateContextDescHeader header;
++    std::uint32_t enabledFlags;
++    std::uint32_t apiVersion; // effective instance API, or 0 if not tracked
++    // Only supplied if the host knows the recording queue family. UINT32_MAX
++    // means unknown; optional GPU profiling is then disabled, not guessed.
++    std::uint32_t queueFamilyIndex;
++};

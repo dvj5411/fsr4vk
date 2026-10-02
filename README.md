@@ -19,8 +19,9 @@ The provider build currently uses a Unix-like host with:
 - a Windows Vulkan import library (`vulkan-1`) visible to the linker.
 
 Building the custom `OptiScaler.dll` requires Windows, Visual Studio 2022, and
-the OptiScaler submodule's recursive dependencies. Release v0.4 includes the
-repo-built `OptiScaler.dll` with the RDR2 fixes; no fallback DLL is bundled.
+the OptiScaler submodule's recursive dependencies. Release v0.4.3 includes the
+repo-built `OptiScaler.dll` and normal provider. Neither the debug provider nor
+a fallback DLL is bundled; building from source still produces the debug DLL.
 
 ## Clone
 
@@ -43,6 +44,7 @@ compiler's search path, set `FSR4_VULKAN_IMPORT_LIBRARY` to its full path.
 ```sh
 export VULKAN_SDK=/path/to/vulkan-sdk
 export FSR4_VULKAN_IMPORT_LIBRARY=/path/to/libvulkan-1.a
+export FSR4_EMBED_ASSETS="$PWD/assets/general"
 ./tools/build-vulkan-provider-windows.sh
 ```
 
@@ -80,6 +82,11 @@ required Vulkan device features. The validated hardware baseline is an RDNA2
 Radeon PRO W6400; support for other GPU/driver combinations is not implied.
 OptiScaler routes its sharpening control through RCAS because internal provider
 sharpening is not supported.
+
+See [the integration contract](provider/INTEGRATION-CONTRACT.md) and
+[v0.4.3 verification](docs/RELEASE-0.4.3-VALIDATION.md) for current requirements
+and tested scope. FSR 4.1.1's captured shaders leave an unmatched final row or
+column unwritten at odd output dimensions; prefer even output dimensions.
 
 ## Licensing and provenance
 

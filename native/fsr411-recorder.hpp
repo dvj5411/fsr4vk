@@ -88,6 +88,9 @@ inline void record_fsr411_frame(
         vkCmdPushConstants(command_buffer,pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,count*4,push.data());
         if(timestamps)write_timestamp2(command_buffer,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,timestamps,timestamp_base+i*2);
         vkCmdDispatch(command_buffer,groups[0],groups[1],1);
+#if defined(FSR4_RESEARCH_CAPTURE)
+        fsr4capture::after_pass(command_buffer,i+1);
+#endif
         if(timestamps)write_timestamp2(command_buffer,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,timestamps,timestamp_base+i*2+1);
         if(i!=26)compute_barrier(pipeline_barrier2,command_buffer);
     }

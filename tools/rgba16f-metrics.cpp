@@ -33,7 +33,14 @@ int main(int argc,char** argv) {
         }
     }
     if(!count || count%4 || a.bad() || b.bad()) return 4;
+    const auto finite=count-nonfinite;
     std::cout<<std::setprecision(14)<<"{\"values\":"<<count<<",\"nonfinite_pairs\":"<<nonfinite
-      <<",\"rmse\":"<<std::sqrt(sum/count)<<",\"max_abs_error\":"<<max_error
-      <<",\"above_tolerance_fraction\":"<<double(above)/count<<"}\n";
+      <<",\"finite_pairs\":"<<finite<<",\"rmse\":";
+    if(finite) std::cout<<std::sqrt(sum/finite); else std::cout<<"null";
+    std::cout<<",\"max_abs_error\":";
+    if(finite) std::cout<<max_error; else std::cout<<"null";
+    std::cout<<",\"above_tolerance_fraction\":";
+    if(finite) std::cout<<double(above)/finite; else std::cout<<"null";
+    std::cout<<",\"valid\":"<<(nonfinite ? "false" : "true")<<"}\n";
+    return nonfinite ? 5 : 0;
 }

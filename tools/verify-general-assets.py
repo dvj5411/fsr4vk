@@ -13,9 +13,12 @@ for tier in ('1080', '2160'):
     for preset in ('native', 'quality', 'balanced', 'performance', 'ultraperf', 'drs'):
         leaf = a.general/tier/preset
         manifest = json.loads((leaf/'manifest.json').read_text())
-        assert manifest['preset'] == preset
-        assert manifest['capacity'] == ([1920,1080] if tier == '1080' else [3840,2160])
-        assert [s['file'] for s in manifest['shaders']] == [f'pass-{i:02}.spv' for i in range(15)]
+        if manifest['preset'] != preset:
+            raise ValueError(f'wrong preset in {leaf}')
+        if manifest['capacity'] != ([1920,1080] if tier == '1080' else [3840,2160]):
+            raise ValueError(f'wrong tensor capacity in {leaf}')
+        if [s['file'] for s in manifest['shaders']] != [f'pass-{i:02}.spv' for i in range(15)]:
+            raise ValueError(f'wrong shader sequence in {leaf}')
         entries = [(s['file'],s['sha256']) for s in manifest['shaders']]
         entries += [('initializers.bin',manifest['initializer_sha256']),('weights.bin',manifest['weights_sha256'])]
         for name, digest in entries:

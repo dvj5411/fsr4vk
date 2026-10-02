@@ -19,6 +19,7 @@
 #include "device-feature-diagnostics.hpp"
 #include "input-formats.hpp"
 #include "ffx_vk_native_inputs.h"
+#include "ffx_vk_create_device_features.h"
 
 #include <algorithm>
 #include <cmath>
@@ -30,6 +31,8 @@
 #include <map>
 #include <atomic>
 #include <chrono>
+#include <mutex>
+#include <limits>
 #include "../native/quality-context.hpp"
 
 namespace {
@@ -60,6 +63,8 @@ constexpr const char* kVersionName = " 4.0.2 VK INT8";
 constexpr const char* kVersion411Name = " 4.1.1 VK INT8";
 
 struct ProviderContext {
+    // CPU API calls serialize; GPU submission/destruction remain host contracts.
+    std::recursive_mutex api_mutex;
     inline static std::atomic<std::uint64_t> next_id{0};
     const std::uint64_t diagnostic_id=++next_id;
     std::uint64_t version = kVersionId;
@@ -67,6 +72,8 @@ struct ProviderContext {
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     PFN_vkGetDeviceProcAddr getDeviceProcAddr = nullptr;
     std::uint32_t apiVersion = VK_API_VERSION_1_1;
+    std::optional<bool> robust_buffer_access, native_mixed_dot_enabled;
+    uint32_t queue_family_index=UINT32_MAX;
     std::uint32_t flags = 0;
     FfxApiDimensions2D maxRenderSize{};
     FfxApiDimensions2D maxUpscaleSize{};
@@ -82,6 +89,7 @@ struct ProviderContext {
     bool device_support_checked = false;
     bool sharpening_ignored_logged = false;
     bool optional_masks_ignored_logged = false;
+    bool unsupported_config_logged = false;
     bool pending_color_reset = false;
     bool resource_snapshot_logged = false;
     uint64_t dispatch_attempts = 0;
@@ -134,6 +142,8 @@ std::filesystem::path diagnostic_path(const std::filesystem::path& assets={}) no
 void write_diagnostic(const std::filesystem::path& path,uint64_t id,const std::string& text) noexcept {
     try {
         if (!path.empty()) {
+            static std::mutex log_mutex;
+            const std::lock_guard<std::mutex> lock(log_mutex);
             std::ofstream log(path,std::ios::app);
             const auto ms=std::chrono::duration_cast<std::chrono::milliseconds>(
                 std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -187,6 +197,16 @@ void deallocate(const ffxAllocationCallbacks* callbacks, void* memory) {
     else std::free(memory);
 }
 
+void validateApiChain(const ffxApiHeader* header) {
+    std::array<const ffxApiHeader*,64> seen{};
+    std::size_t count=0;
+    for (auto* node=header;node;node=node->pNext) {
+        if(count==seen.size() || std::find(seen.begin(),seen.begin()+count,node)!=seen.begin()+count)
+            throw std::invalid_argument("FFX descriptor chain is cyclic or exceeds 64 nodes");
+        seen[count++]=node;
+    }
+}
+
 const CreateBackendVkDesc* findBackend(const ffxApiHeader* header) {
     for (auto* current = header; current; current = current->pNext) {
         if (current->type == kBackendVkDescType) {
@@ -231,6 +251,14 @@ float radicalInverse(std::uint32_t index, std::uint32_t base) {
         fraction *= inverseBase;
     }
     return value;
+}
+
+const char* dispatchScalarProblem(const ffxDispatchDescUpscale& d) noexcept {
+    if(!std::isfinite(d.jitterOffset.x) || !std::isfinite(d.jitterOffset.y))
+        return "jitterOffset must contain finite values";
+    if(!std::isfinite(d.motionVectorScale.x) || !std::isfinite(d.motionVectorScale.y))
+        return "motionVectorScale must contain finite values";
+    return nullptr;
 }
 
 ffxReturnCode_t prepareVulkanDevice(ffxQueryDescVkPrepareDevice* query) noexcept {
@@ -286,6 +314,9 @@ ffxReturnCode_t releaseVulkanDevice(ffxQueryDescVkReleaseDevice* query) noexcept
 
 ffxReturnCode_t queryUpscale(ffxContext* context, ffxQueryDescHeader* header) {
     switch (header->type) {
+    case FSR4VK_QUERY_DESC_TYPE_DEVICE_FEATURES:
+        reinterpret_cast<Fsr4VkQueryDeviceFeatures*>(header)->version=1;
+        return FFX_API_RETURN_OK;
     case FSR4VK_QUERY_DESC_TYPE_NATIVE_INPUTS: {
         auto* query = reinterpret_cast<Fsr4VkQueryNativeInputs*>(header);
         query->version = 0;
@@ -333,18 +364,22 @@ ffxReturnCode_t queryUpscale(ffxContext* context, ffxQueryDescHeader* header) {
         if (!query->pOutRenderWidth || !query->pOutRenderHeight || ratio == 0.0f) {
             return FFX_API_RETURN_ERROR_PARAMETER;
         }
-        *query->pOutRenderWidth = static_cast<std::uint32_t>(
-            std::ceil(static_cast<float>(query->displayWidth) / ratio));
-        *query->pOutRenderHeight = static_cast<std::uint32_t>(
-            std::ceil(static_cast<float>(query->displayHeight) / ratio));
+        if(!query->displayWidth || !query->displayHeight) return FFX_API_RETURN_ERROR_PARAMETER;
+        const double width=std::ceil(double(query->displayWidth)/double(ratio));
+        const double height=std::ceil(double(query->displayHeight)/double(ratio));
+        if(width>UINT32_MAX || height>UINT32_MAX) return FFX_API_RETURN_ERROR_PARAMETER;
+        *query->pOutRenderWidth = static_cast<std::uint32_t>(width);
+        *query->pOutRenderHeight = static_cast<std::uint32_t>(height);
         return FFX_API_RETURN_OK;
     }
     case FFX_API_QUERY_DESC_TYPE_UPSCALE_GETJITTERPHASECOUNT: {
         auto* query = reinterpret_cast<ffxQueryDescUpscaleGetJitterPhaseCount*>(header);
-        if (!query->pOutPhaseCount || !query->renderWidth) return FFX_API_RETURN_ERROR_PARAMETER;
-        const float ratio = static_cast<float>(query->displayWidth) /
-                            static_cast<float>(query->renderWidth);
-        *query->pOutPhaseCount = static_cast<std::int32_t>(8.0f * ratio * ratio);
+        if (!query->pOutPhaseCount || !query->renderWidth || !query->displayWidth)
+            return FFX_API_RETURN_ERROR_PARAMETER;
+        const double ratio = double(query->displayWidth)/double(query->renderWidth);
+        const double phases=8.0*ratio*ratio;
+        if(phases<1.0 || phases>double(INT32_MAX)) return FFX_API_RETURN_ERROR_PARAMETER;
+        *query->pOutPhaseCount = static_cast<std::int32_t>(phases);
         return FFX_API_RETURN_OK;
     }
     case FFX_API_QUERY_DESC_TYPE_UPSCALE_GETJITTEROFFSET: {
@@ -373,7 +408,10 @@ ffxReturnCode_t queryUpscale(ffxContext* context, ffxQueryDescHeader* header) {
         if (!context || !*context || !query->gpuMemoryUsageUpscaler) {
             return FFX_API_RETURN_ERROR_PARAMETER;
         }
-        return FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
+        *query->gpuMemoryUsageUpscaler={};
+        for(const auto& [preset,core]:static_cast<ProviderContext*>(*context)->cores)
+            if(core) query->gpuMemoryUsageUpscaler->totalUsageInBytes+=core->owned_allocation_bytes();
+        return FFX_API_RETURN_OK;
     }
     case FFX_API_QUERY_DESC_TYPE_UPSCALE_GPU_MEMORY_USAGE_V2: {
         auto* query = reinterpret_cast<ffxQueryDescUpscaleGetGPUMemoryUsageV2*>(header);
@@ -387,7 +425,7 @@ ffxReturnCode_t queryUpscale(ffxContext* context, ffxQueryDescHeader* header) {
 
 }  // namespace
 
-extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
+static ffxReturnCode_t createContextImpl(
     ffxContext* context,
     ffxCreateContextDescHeader* header,
     const ffxAllocationCallbacks* callbacks) {
@@ -395,6 +433,14 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
     *context = nullptr;
     if (header->type != FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE) {
         return FFX_API_RETURN_NO_PROVIDER;
+    }
+    validateApiChain(header);
+    for(const auto type : std::array<ffxStructType_t,4>{kBackendVkDescType,FFX_API_DESC_TYPE_OVERRIDE_VERSION,kFsr4VulkanApiVersionDescType,FSR4VK_CREATE_DESC_TYPE_DEVICE_FEATURES}) {
+        bool found=false;
+        for(auto* node=header;node;node=node->pNext) if(node->type==type) {
+            if(found) return FFX_API_RETURN_ERROR_PARAMETER;
+            found=true;
+        }
     }
     const auto version = findVersion(header);
     // Well-behaved callers query this DLL and request kVersionId. Some games
@@ -412,12 +458,25 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
     const auto* create = reinterpret_cast<const ffxCreateContextDescUpscale*>(header);
     void* storage = allocate(callbacks, sizeof(ProviderContext));
     if (!storage) return FFX_API_RETURN_ERROR_MEMORY;
-    auto* provider = new (storage) ProviderContext{};
+    ProviderContext* provider=nullptr;
+    try { provider=new (storage) ProviderContext{}; }
+    catch (...) { deallocate(callbacks,storage); throw; }
     provider->version = version==kVersion411Id ? kVersion411Id : kVersionId;
     provider->device = backend->device;
     provider->physicalDevice = backend->physicalDevice;
     provider->getDeviceProcAddr = backend->getDeviceProcAddr;
     provider->apiVersion = findVulkanApiVersion(header);
+    for(auto* node=header;node;node=node->pNext) if(node->type==FSR4VK_CREATE_DESC_TYPE_DEVICE_FEATURES) {
+        const auto& info=*reinterpret_cast<const Fsr4VkCreateDeviceFeatures*>(node);
+        if(info.enabledFlags & ~(FSR4VK_DEVICE_ROBUST_BUFFER_ACCESS|FSR4VK_DEVICE_NATIVE_MIXED_DOT)) {
+            provider->~ProviderContext(); deallocate(callbacks,provider);
+            return FFX_API_RETURN_ERROR_PARAMETER;
+        }
+        provider->robust_buffer_access=(info.enabledFlags & FSR4VK_DEVICE_ROBUST_BUFFER_ACCESS)!=0;
+        provider->queue_family_index=info.queueFamilyIndex;
+        provider->native_mixed_dot_enabled=(info.enabledFlags & FSR4VK_DEVICE_NATIVE_MIXED_DOT)!=0;
+        if(info.apiVersion>=VK_API_VERSION_1_1) provider->apiVersion=info.apiVersion;
+    }
     provider->flags = create->flags;
     provider->maxRenderSize = create->maxRenderSize;
     provider->maxUpscaleSize = create->maxUpscaleSize;
@@ -451,7 +510,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
         if(permutation!=required_flags)
             throw std::invalid_argument("provider requires inverted depth and low-resolution non-jittered motion vectors");
         fsr4vk::validate_descriptor_commands(backend->device,backend->getDeviceProcAddr);
-        (void)fsr4vk::DeviceDispatch(backend->device,backend->getDeviceProcAddr,provider->apiVersion);
+        (void)fsr4vk::DeviceDispatch(backend->device,backend->getDeviceProcAddr,provider->apiVersion,false);
         diagnostic(*provider,"context created flags="+std::to_string(create->flags)+
                    " api="+std::to_string(VK_API_VERSION_MAJOR(provider->apiVersion))+"."+
                    std::to_string(VK_API_VERSION_MINOR(provider->apiVersion)));
@@ -459,35 +518,40 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(
             std::string((create->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE) ? "automatic (external exposure ignored)" : "external (1x1 R16_FLOAT or R32_FLOAT required)")+
             " HDR="+std::to_string(bool(create->flags & FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE)));
     } catch (const std::exception& error) {
-        provider_message(*provider,FFX_API_MESSAGE_TYPE_ERROR,std::string("context rejected: ")+error.what());
+        try { provider_message(*provider,FFX_API_MESSAGE_TYPE_ERROR,std::string("context rejected: ")+error.what()); } catch (...) { }
         provider->~ProviderContext();
         deallocate(callbacks,provider);
+        return dynamic_cast<const std::bad_alloc*>(&error) ? FFX_API_RETURN_ERROR_MEMORY : FFX_API_RETURN_ERROR_RUNTIME_ERROR;
+    } catch (...) {
+        provider->~ProviderContext();deallocate(callbacks,provider);
         return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
     }
     *context = provider;
     return FFX_API_RETURN_OK;
 }
 
-extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDestroyContext(
+static ffxReturnCode_t destroyContextImpl(
     ffxContext* context,
     const ffxAllocationCallbacks* callbacks) {
     if (!context || !*context || !validAllocator(callbacks)) return FFX_API_RETURN_ERROR_PARAMETER;
     auto* provider = reinterpret_cast<ProviderContext*>(*context);
-    diagnostic(*provider,"context destroyed cached_models="+std::to_string(provider->cores.size())+
+    try { diagnostic(*provider,"context destroyed cached_models="+std::to_string(provider->cores.size())+
         " dispatch_attempts="+std::to_string(provider->dispatch_attempts)+
         " dispatches_recorded="+std::to_string(provider->dispatch_successes)+
         " rejected_or_failed="+std::to_string(provider->dispatch_attempts-provider->dispatch_successes)+
-        " (recorded does not imply GPU completion)");
+        " (recorded does not imply GPU completion)"); } catch (...) { }
     provider->~ProviderContext();
     deallocate(callbacks, provider);
     *context = nullptr;
     return FFX_API_RETURN_OK;
 }
 
-extern "C" FFX_API_ENTRY ffxReturnCode_t ffxConfigure(
+static ffxReturnCode_t configureImpl(
     ffxContext* context,
     const ffxConfigureDescHeader* header) {
     if (!context || !*context || !header) return FFX_API_RETURN_ERROR_PARAMETER;
+    const std::lock_guard<std::recursive_mutex> lock(static_cast<ProviderContext*>(*context)->api_mutex);
+    validateApiChain(header);
     if (header->type == FSR4VK_CONFIGURE_DESC_TYPE_PRESET) {
         const auto preset = reinterpret_cast<const Fsr4VkConfigurePreset*>(header)->preset;
         if (preset != FSR4VK_PRESET_AUTO && !presetName(preset))
@@ -498,14 +562,25 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxConfigure(
         static_cast<ProviderContext*>(*context)->forced_preset = preset;
         return FFX_API_RETURN_OK;
     }
-    if (header->type == FFX_API_CONFIGURE_DESC_TYPE_UPSCALE_KEYVALUE) return FFX_API_RETURN_OK;
+    if (header->type == FFX_API_CONFIGURE_DESC_TYPE_UPSCALE_KEYVALUE) {
+        auto& provider=*static_cast<ProviderContext*>(*context);
+        if(!provider.unsupported_config_logged) {
+            provider_message(provider,FFX_API_MESSAGE_TYPE_WARNING,
+                "FSR4VK_WARNING_UNSUPPORTED_CONFIGURATION: standard key/value controls are not applied by the captured INT8 models; preset control is supported separately");
+            provider.unsupported_config_logged=true;
+        }
+        return FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
+    }
     return FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
 }
 
-extern "C" FFX_API_ENTRY ffxReturnCode_t ffxQuery(
+static ffxReturnCode_t queryImpl(
     ffxContext* context,
     ffxQueryDescHeader* header) {
     if (!header) return FFX_API_RETURN_ERROR_PARAMETER;
+    validateApiChain(header);
+    std::unique_lock<std::recursive_mutex> lock;
+    if(context && *context) lock=std::unique_lock<std::recursive_mutex>(static_cast<ProviderContext*>(*context)->api_mutex);
     if (!context && header->type == FFX_API_QUERY_DESC_TYPE_VK_PREPARE_DEVICE) {
         return prepareVulkanDevice(reinterpret_cast<ffxQueryDescVkPrepareDevice*>(header));
     }
@@ -534,10 +609,12 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxQuery(
     return queryUpscale(context, header);
 }
 
-extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
+static ffxReturnCode_t dispatchImpl(
     ffxContext* context,
     const ffxDispatchDescHeader* header) {
     if (!context || !*context || !header) return FFX_API_RETURN_ERROR_PARAMETER;
+    const std::lock_guard<std::recursive_mutex> lock(static_cast<ProviderContext*>(*context)->api_mutex);
+    validateApiChain(header);
     if (header->type != FFX_API_DISPATCH_DESC_TYPE_UPSCALE) {
         return FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
     }
@@ -554,6 +631,7 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
         return FFX_API_RETURN_ERROR_PARAMETER;
     };
     if (!d.commandList) return reject("null command list");
+    if(const auto* problem=dispatchScalarProblem(d)) return reject(problem);
     if (d.enableSharpening && !provider->sharpening_ignored_logged) {
         provider_message(*provider, FFX_API_MESSAGE_TYPE_WARNING,
                          "FSR4 Vulkan internal sharpening is unavailable; use host RCAS if desired");
@@ -706,9 +784,12 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                     throw std::runtime_error(std::string("FSR4VK_ERROR_DEVICE_CAPABILITY_CHECK: ")+error.what()+
                         "; check GPU/driver support; unsupported capabilities cannot be enabled by the provider");
                 }
-                diagnostic(*provider,"physical capability check passed; enabled feature status=UNKNOWN (Vulkan cannot query enabled bits after vkCreateDevice). "
-                    "See context=0 device negotiation for the exact host-request changes, if the host called PREPARE_DEVICE; "
-                    "without that call the host must log its VkDeviceCreateInfo. Physical support is not proof of enablement.");
+                if(provider->robust_buffer_access.has_value())
+                    diagnostic(*provider,"host device snapshot: robustBufferAccess="+std::to_string(*provider->robust_buffer_access)+
+                        " nativeMixedDotEnabled="+std::to_string(provider->native_mixed_dot_enabled.value_or(false))+
+                        " (snapshot from successful device creation; other required bits still rely on negotiation contract)");
+                else diagnostic(*provider,"physical capability check passed; enabled feature status=UNKNOWN (Vulkan cannot query enabled bits after vkCreateDevice). "
+                        "See context=0 device negotiation or supply the optional successful device-create snapshot. Physical support is not proof of enablement.");
                 provider->device_support_checked=true;
             }
             diagnostic(*provider,"creating model="+selected_preset+
@@ -723,7 +804,11 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                 provider->maxRenderSize.width,provider->maxRenderSize.height,
                 provider->maxUpscaleSize.width,provider->maxUpscaleSize.height,
                 provider->apiVersion,
-                (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0,provider->version==kVersion411Id);
+                (provider->flags & FFX_UPSCALE_ENABLE_AUTO_EXPOSURE)==0,provider->version==kVersion411Id,
+                provider->robust_buffer_access,provider->native_mixed_dot_enabled,
+                provider->diagnostic_path.empty() ? std::function<void(const std::string&)>{} :
+                    std::function<void(const std::string&)>{[path=provider->diagnostic_path,id=provider->diagnostic_id](const auto& text){write_diagnostic(path,id,text);}},
+                provider->queue_family_index);
             core=created.get();
             provider->cores[selected_preset]=std::move(created);
             if(!provider->diagnostic_path.empty()) {
@@ -736,7 +821,8 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
             }
             diagnostic(*provider,"model ready="+selected_preset+" cpu_build_ms="+
                 std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now()-build_started).count()));
+                    std::chrono::steady_clock::now()-build_started).count())+
+                " owned_device_memory_bytes="+std::to_string(core->owned_allocation_bytes()));
         }
         stage="color-space pipeline selection";
         const bool color_changed=core->set_color_space(color_space);
@@ -804,4 +890,29 @@ extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(
                          "FSR4 Vulkan dispatch failed: unknown exception");
         return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
     }
+}
+
+// No exception may cross the public C ABI, including failures while formatting
+// another error or calling a noncompliant user allocation callback.
+template<class Call> static ffxReturnCode_t apiBoundary(Call&& call) noexcept {
+    try { return call(); }
+    catch(const std::bad_alloc&) { return FFX_API_RETURN_ERROR_MEMORY; }
+    catch(const std::invalid_argument&) { return FFX_API_RETURN_ERROR_PARAMETER; }
+    catch(...) { return FFX_API_RETURN_ERROR_RUNTIME_ERROR; }
+}
+extern "C" FFX_API_ENTRY ffxReturnCode_t ffxCreateContext(ffxContext* context,ffxCreateContextDescHeader* desc,const ffxAllocationCallbacks* callbacks) {
+    return apiBoundary([&]{return createContextImpl(context,desc,callbacks);});
+}
+extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDestroyContext(ffxContext* context,const ffxAllocationCallbacks* callbacks) {
+    // Exclusive destruction after GPU completion is required by the host ABI.
+    return apiBoundary([&]{return destroyContextImpl(context,callbacks);});
+}
+extern "C" FFX_API_ENTRY ffxReturnCode_t ffxConfigure(ffxContext* context,const ffxConfigureDescHeader* desc) {
+    return apiBoundary([&]{return configureImpl(context,desc);});
+}
+extern "C" FFX_API_ENTRY ffxReturnCode_t ffxQuery(ffxContext* context,ffxQueryDescHeader* desc) {
+    return apiBoundary([&]{return queryImpl(context,desc);});
+}
+extern "C" FFX_API_ENTRY ffxReturnCode_t ffxDispatch(ffxContext* context,const ffxDispatchDescHeader* desc) {
+    return apiBoundary([&]{return dispatchImpl(context,desc);});
 }

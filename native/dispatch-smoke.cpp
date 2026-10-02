@@ -5,7 +5,8 @@ static VkQueryPool tracked_pass_queries = VK_NULL_HANDLE;
 static VkResult track_query_pool(VkDevice device,const VkQueryPoolCreateInfo* info,
     const VkAllocationCallbacks* alloc,VkQueryPool* output) {
     const auto result = vkCreateQueryPool(device,info,alloc,output);
-    if (result==VK_SUCCESS && info->queryType==VK_QUERY_TYPE_TIMESTAMP && (info->queryCount==30 || info->queryCount==56))
+    if (result==VK_SUCCESS && info->queryType==VK_QUERY_TYPE_TIMESTAMP &&
+        (info->queryCount==30*8 || info->queryCount==56*8 || info->queryCount==28*8))
         tracked_pass_queries=*output;
     return result;
 }
@@ -29,6 +30,8 @@ struct CreateBackendVkDesc {
 #endif
 
 #include "../provider/ffx_vk_native_inputs.h"
+#include "../provider/ffx_vk_create_device_features.h"
+#include "../provider/enabled-device-state.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -453,8 +456,17 @@ int main(int argc, char** argv) {
         }
         return fallback;
     };
-    const float first_exposure=test_float("FSR4_TEST_EXTERNAL_EXPOSURE",1.f);
-    const float second_exposure=test_float("FSR4_TEST_SECOND_EXPOSURE",first_exposure);
+    const auto test_exposure=[&](const char* name,float fallback) {
+        if(!std::getenv("FSR4_TEST_EXPOSURE_POISON")) return test_float(name,fallback);
+        if(const char* value=std::getenv(name)) {
+            char* end=nullptr;const auto parsed=std::strtof(value,&end);
+            if(end==value || *end) throw std::invalid_argument(std::string("invalid exposure poison: ")+name);
+            return parsed; // Deliberate negative/NaN/Inf samples, accuracy tests only.
+        }
+        return fallback;
+    };
+    const float first_exposure=test_exposure("FSR4_TEST_EXTERNAL_EXPOSURE",1.f);
+    const float second_exposure=test_exposure("FSR4_TEST_SECOND_EXPOSURE",first_exposure);
     const float first_pre_exposure=test_float("FSR4_TEST_PRE_EXPOSURE",1.f);
     const float second_pre_exposure=test_float("FSR4_TEST_SECOND_PRE_EXPOSURE",first_pre_exposure);
     const bool reset_second=std::getenv("FSR4_TEST_RESET_SECOND_FRAME")!=nullptr;
@@ -775,18 +787,10 @@ int main(int argc, char** argv) {
             get_binding_offset(device, set_layouts[index], descriptor_bindings[index],
                                &descriptor_binding_offsets[index]);
         }
-        // Set 2 consists solely of the mutable descriptor array, so its queried
-        // byte size exposes the implementation-selected stride for that binding.
-        // This may include padding beyond the largest concrete descriptor size.
-        const VkDeviceSize mutable_descriptor_stride =
-            descriptor_layout_sizes[2] / kDescriptorCount;
-        const VkDeviceSize image_heap_stride =
-            (descriptor_layout_sizes[1] - descriptor_binding_offsets[1]) /
-            kDescriptorCount;
-        if (mutable_descriptor_stride == 0 ||
-            mutable_descriptor_stride != image_heap_stride) {
-            throw std::runtime_error("inconsistent mutable descriptor strides");
-        }
+        const auto enabled_device=fsr4vk::read_enabled_device_state(*enabled_features.get(),application.apiVersion);
+        const fsr4vk::DescriptorLayout descriptor_layout(descriptor_properties,descriptor_layout_sizes,
+            descriptor_binding_offsets,enabled_device.robust_buffer_access);
+        const auto mutable_descriptor_stride=descriptor_layout.mutable_stride;
         std::cout << "descriptor_layout_sizes=" << descriptor_layout_sizes[0] << ','
                   << descriptor_layout_sizes[1] << ',' << descriptor_layout_sizes[2]
                   << ",embedded"
@@ -897,11 +901,14 @@ int main(int argc, char** argv) {
         std::memcpy(staging_bytes + color_size + depth_size, frame.motion.data(), motion_size);
         const auto upload_exposure = [&](float exposure) {
             if(half_exposure_test) {
-                const auto half=float_to_half(exposure);
+                const auto half=std::isnan(exposure) ? uint16_t(0x7e00u) : float_to_half(exposure);
                 std::memcpy(staging_bytes+exposure_offset,&half,sizeof(half));
             } else std::memcpy(staging_bytes+exposure_offset,&exposure,sizeof(exposure));
         };
         upload_exposure(first_exposure);
+#if defined(FSR4_RESEARCH_CAPTURE)
+        fsr4capture::blob("uploaded-inputs.bin",staging_bytes,exposure_offset+(half_exposure_test ? 2 : 4));
+#endif
         const VkDeviceSize output_size =
             static_cast<VkDeviceSize>(kOutputWidth) * kOutputHeight * 8;
         buffers.push_back(create_buffer(
@@ -998,7 +1005,7 @@ int main(int argc, char** argv) {
                 descriptor_size = descriptor_properties.storageImageDescriptorSize;
             }
             auto* destination = static_cast<std::uint8_t*>(buffers[1].mapped) +
-                descriptor_binding_offsets[1] + index * mutable_descriptor_stride;
+                descriptor_layout.offset(1,index,descriptor_size);
             get_descriptor(device, &descriptor_info, descriptor_size, destination);
         };
         const auto write_buffer_descriptor_buffer = [&](std::uint32_t index,
@@ -1012,9 +1019,9 @@ int main(int argc, char** argv) {
             descriptor_info.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
             descriptor_info.data.pStorageBuffer = &address_info;
             auto* destination = static_cast<std::uint8_t*>(buffers[2].mapped) +
-                descriptor_binding_offsets[2] + index * mutable_descriptor_stride;
+                descriptor_layout.offset(2,index,descriptor_layout.storage_buffer_size);
             get_descriptor(device, &descriptor_info,
-                           descriptor_properties.storageBufferDescriptorSize,
+                           descriptor_layout.storage_buffer_size,
                            destination);
         };
 
@@ -1086,13 +1093,25 @@ int main(int argc, char** argv) {
         output_sentinel.float32[1] = 1.0f;
         output_sentinel.float32[2] = 1.0f;
         output_sentinel.float32[3] = 1.0f;
+        if(const char* poison=std::getenv("FSR4_TEST_OUTPUT_POISON")) {
+            const std::string mode(poison);
+            if(mode!="1" && mode!="2") throw std::invalid_argument("FSR4_TEST_OUTPUT_POISON must be 1 or 2");
+            const float sign=mode=="1" ? 1.0f : -1.0f;
+            output_sentinel.float32[0]=sign*0.25f;
+            output_sentinel.float32[1]=-sign*0.5f;
+            output_sentinel.float32[2]=sign*0.75f;
+            output_sentinel.float32[3]=mode=="1" ? 1.0f : 0.5f;
+            std::cout<<"output_poison="<<mode<<" (research-only input, not a production shader change)\n";
+        }
         const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
         for (const Image* image : {&history, &recurrent}) {
             vkCmdClearColorImage(command_buffer, image->image,
                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &zero, 1, &range);
         }
+        VkClearColorValue reprojected_sentinel{};
+        for(auto& value:reprojected_sentinel.float32) value=1.0f;
         vkCmdClearColorImage(command_buffer, reprojected.image,
-                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &output_sentinel, 1,
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &reprojected_sentinel, 1,
                              &range);
         vkCmdClearColorImage(command_buffer, output.image,
                              VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &output_sentinel, 1,
@@ -1311,7 +1330,8 @@ int main(int argc, char** argv) {
             std::array<uint64_t,56> times{};
             const auto pass_count=provider->version==kVersion411Id ? 28u : 15u;
             check(vkGetQueryPoolResults(device,benchmark_queries,0,2,sizeof(whole),whole.data(),sizeof(uint64_t),VK_QUERY_RESULT_64_BIT),"context timestamps");
-            check(vkGetQueryPoolResults(device,tracked_pass_queries,0,pass_count*2,sizeof(times),times.data(),sizeof(uint64_t),VK_QUERY_RESULT_64_BIT),"pass timestamps");
+            check(vkGetQueryPoolResults(device,tracked_pass_queries,provider->active_core->last_profile_query_base(),
+                pass_count*2,sizeof(times),times.data(),sizeof(uint64_t),VK_QUERY_RESULT_64_BIT),"pass timestamps");
             const uint64_t mask=timestamp_bits>=64 ? ~uint64_t(0) : (uint64_t(1)<<timestamp_bits)-1;
             const auto ms=[&](uint64_t a,uint64_t b) {return double((b-a)&mask)*physical_properties.limits.timestampPeriod/1e6;};
             std::vector<uint16_t> cached_pixels(output_size/2);
@@ -1355,6 +1375,10 @@ int main(int argc, char** argv) {
         if (use_context) {
             if (use_provider) {
                 CreateBackendVkDesc backend{{3,nullptr},device,physical_device,vkGetDeviceProcAddr};
+                Fsr4VkCreateDeviceFeatures feature_snapshot{{FSR4VK_CREATE_DESC_TYPE_DEVICE_FEATURES,nullptr},
+                    (enabled_device.robust_buffer_access ? FSR4VK_DEVICE_ROBUST_BUFFER_ACCESS : 0u) |
+                    (enabled_device.native_mixed_dot ? FSR4VK_DEVICE_NATIVE_MIXED_DOT : 0u),application.apiVersion,queue_family};
+                backend.header.pNext=&feature_snapshot.header;
                 ffxOverrideVersion model_version{};
                 model_version.header.type=FFX_API_DESC_TYPE_OVERRIDE_VERSION;
                 if (const char* version=std::getenv("FSR4_TEST_VERSION")) {
@@ -1362,6 +1386,7 @@ int main(int argc, char** argv) {
                         throw std::invalid_argument("FSR4_TEST_VERSION must be 4.0.2 or 4.1.1");
                     model_version.versionId=(0xF5A5CA1Eull<<32) | (4ull<<22) |
                         (std::string(version)=="4.1.1" ? (1ull<<12)|1ull : 2ull);
+                    model_version.header.pNext=&feature_snapshot.header;
                     backend.header.pNext=&model_version.header;
                 }
                 ffxCreateContextDescUpscale create{};
@@ -1387,7 +1412,9 @@ int main(int argc, char** argv) {
                     physical_device, device, shader_dir, initializer_path,
                     weights_path, false, vkGetDeviceProcAddr,
                     fsr4experiment::render_width, fsr4experiment::render_height,
-                    kOutputWidth, kOutputHeight, application.apiVersion);
+                    kOutputWidth, kOutputHeight, application.apiVersion,false,false,
+                    enabled_device.robust_buffer_access,enabled_device.native_mixed_dot,
+                    std::function<void(const std::string&)>{},queue_family);
             }
             record_profiled_context();
         } else {
@@ -1453,6 +1480,9 @@ int main(int argc, char** argv) {
         check(promoted_dispatch.queue_submit2(queue, 1, &submit, VK_NULL_HANDLE),
               "vkQueueSubmit2/vkQueueSubmit2KHR");
         check(vkQueueWaitIdle(queue), "vkQueueWaitIdle");
+#if defined(FSR4_RESEARCH_CAPTURE)
+        fsr4capture::flush();
+#endif
         collect_profile(0);
 
         if(temporal_test || color_switch_test) {
@@ -1632,6 +1662,9 @@ int main(int argc, char** argv) {
     } catch (const std::exception& exception) {
         std::cerr << "error=" << exception.what() << '\n';
         if (device) vkDeviceWaitIdle(device);
+#if defined(FSR4_RESEARCH_CAPTURE)
+        fsr4capture::release();
+#endif
         context.reset();
         if (api_context) ffxDestroyContext(&api_context,nullptr);
         for (auto pipeline : pipelines) vkDestroyPipeline(device, pipeline, nullptr);

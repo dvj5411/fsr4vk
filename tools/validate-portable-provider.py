@@ -14,6 +14,7 @@ p.add_argument('--steam-root',type=Path,required=True)
 p.add_argument('--driver-filter',required=True)
 p.add_argument('--runner',choices=['proton','umu'],default='proton')
 p.add_argument('--expected-backend',default='portable-int8',choices=['portable-int8','native-mixed-dot'])
+p.add_argument('--keep-going',action='store_true',help='retain every failure and continue the remaining cases')
 a=p.parse_args()
 out=a.output.resolve();out.mkdir(parents=True,exist_ok=True)
 proton=a.proton.resolve();exe=a.probe.resolve();dll=exe.parent/'amd_fidelityfx_upscaler_vk.dll'
@@ -50,6 +51,6 @@ for c in json.loads(a.cases.read_text())['cases']:
   entry['status']='passed' if all(f['passed'] for f in entry['frames']) else 'failed_threshold'
  except Exception as error:entry.update(status='failed',error=str(error))
  results.append(entry);(out/'results.json').write_text(json.dumps({'dll_sha256':hashlib.sha256(dll.read_bytes()).hexdigest(),'cases':results},indent=2)+'\n');print(json.dumps(entry),flush=True)
- if entry['status']!='passed':break
+ if entry['status']!='passed' and not a.keep_going:break
 
 raise SystemExit(0 if len(results)==len(json.loads(a.cases.read_text())['cases']) and all(x['status']=='passed' for x in results) else 1)

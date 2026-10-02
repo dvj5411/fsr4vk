@@ -43,7 +43,7 @@ inline std::string resource_problem(const char* name, const FfxApiResource& r,
     constexpr uint32_t mask=FFX_API_RESOURCE_USAGE_DEPTHTARGET | FFX_API_RESOURCE_USAGE_STENCILTARGET;
     if(r.resource && r.description.type==FFX_API_RESOURCE_TYPE_TEXTURE2D &&
        (r.description.usage & mask)==depth_usage && r.description.width==width &&
-       r.description.height==height && r.description.format==format && r.state==state) return {};
+       r.description.height==height && r.description.depth<=1 && r.description.format==format && r.state==state) return {};
     std::string reason=std::string(r.resource ? "invalid " : "missing ")+name+" resource: ";
     if(!r.resource) reason+="resource handle is null; ";
     if(r.description.type!=FFX_API_RESOURCE_TYPE_TEXTURE2D)
@@ -52,6 +52,8 @@ inline std::string resource_problem(const char* name, const FfxApiResource& r,
     if(r.description.width!=width || r.description.height!=height)
         reason+="dimensions="+std::to_string(r.description.width)+"x"+std::to_string(r.description.height)+
             " expected="+std::to_string(width)+"x"+std::to_string(height)+"; ";
+    if(r.description.depth>1)
+        reason+="depth/layers="+std::to_string(r.description.depth)+" expected=single-layer base-level 2D resource; ";
     if(r.description.format!=format) reason+="incompatible format; ";
     reason+="current_format="+surface_format(r.description.format)+"; accepted_formats=["+accepted+"]; ";
     if((r.description.usage & mask)!=depth_usage)

@@ -8,6 +8,8 @@ import subprocess
 import sys
 import importlib.util
 import os
+import tempfile
+from asset_compression import compress_bytes
 
 spec = importlib.util.spec_from_file_location('portable_assets', Path(__file__).with_name('portable-assets.py'))
 portable_assets = importlib.util.module_from_spec(spec)
@@ -26,24 +28,31 @@ subprocess.run([sys.executable, str(Path(__file__).with_name('verify-general-ass
 portable_root = a.general.parent/'portable'
 print(f'Verified {portable_assets.verify(a.general, portable_root)} portable shaders.')
 a.output.mkdir(parents=True, exist_ok=True)
+if (a.output/'embedded-assets.json').exists():
+    old = json.loads((a.output/'embedded-assets.json').read_text())
+    if old['compression'] != a.compression:
+        raise ValueError('refusing to reuse an embedding directory with a different codec mode')
 resources, index, entries = {}, [], []
 def add_resource(path, key, payload):
     if not payload or len(payload)>64*1024*1024:
         raise ValueError('asset outside runtime size limit: '+key)
     digest = hashlib.sha256(payload).hexdigest()
     if digest not in resources:
-        stored=payload; compressed=False; stored_path=path.resolve()
+        stored=payload; compressed=False
         if a.compression=='zstd':
-            candidate=subprocess.run([a.zstd,'-q','-19','--check','--stdout',str(path)],
-                check=True,capture_output=True).stdout
-            restored=subprocess.run([a.zstd,'-q','-d','--stdout'],input=candidate,
-                check=True,capture_output=True).stdout
-            if restored!=payload: raise ValueError('compressed asset round-trip failed: '+key)
+            # Compress the bytes already hashed, not a second read of a live file.
+            candidate=compress_bytes(payload,a.zstd)
             if len(candidate)<len(payload):
                 stored=candidate;compressed=True
-                directory=a.output/'payloads';directory.mkdir(exist_ok=True)
-                stored_path=(directory/(digest+'.zst')).resolve()
-                stored_path.write_bytes(stored)
+        directory=a.output/'payloads';directory.mkdir(exist_ok=True)
+        stored_path=(directory/(digest+('.zst' if compressed else '.raw'))).resolve()
+        # RC must refer only to owned frozen bytes, including raw debug payloads.
+        # Replace atomically so repeated deterministic generation cannot expose
+        # a partially written payload to a resource compiler.
+        with tempfile.NamedTemporaryFile(dir=directory,delete=False) as temporary:
+            temporary.write(stored)
+            staged=Path(temporary.name)
+        staged.replace(stored_path)
         resources[digest] = (len(resources)+100,stored_path,len(stored),compressed,
                              hashlib.sha256(stored).hexdigest())
     rid,_,stored_size,compressed,stored_hash=resources[digest]

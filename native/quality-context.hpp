@@ -8,6 +8,9 @@
 #include "external-exposure-spv.hpp"
 #include "color-space.hpp"
 #include "buffer-memory-policy.hpp"
+#include "descriptor-layout.hpp"
+#include "resource-adoption.hpp"
+#include "timestamp-policy.hpp"
 #include "model11-row-bounds.hpp"
 #include "../provider/vulkan_device_features.hpp"
 #include <algorithm>
@@ -17,6 +20,11 @@
 #include <fstream>
 #include <limits>
 #include <vector>
+#include <functional>
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <iomanip>
 
 namespace fsr4core {
 namespace fs = std::filesystem;
@@ -32,6 +40,8 @@ struct Buffer {
     uint32_t memory_type_index = 0;
     VkMemoryPropertyFlags memory_properties = 0;
     bool preferred_memory_fallback = false;
+    mutable VkDeviceAddress cached_address=0;
+    VkDeviceSize allocation_size = 0;
 };
 
 struct Image {
@@ -41,6 +51,7 @@ struct Image {
     VkFormat format = VK_FORMAT_UNDEFINED;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
+    VkDeviceSize allocation_size = 0;
 };
 
 struct OptimizedConstants {
@@ -81,7 +92,7 @@ inline std::vector<std::uint8_t> read_bytes(const fs::path& path) {
     std::ifstream stream(path, std::ios::binary | std::ios::ate);
     if (!stream) throw std::runtime_error("cannot open " + path.string());
     const auto size = stream.tellg();
-    if (size <= 0) throw std::runtime_error("empty file " + path.string());
+    if (size <= 0 || size>64*1024*1024) throw std::runtime_error("asset size outside 1..64 MiB: " + path.string());
     std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
     stream.seekg(0);
     stream.read(reinterpret_cast<char*>(bytes.data()), size);
@@ -124,11 +135,15 @@ inline Buffer create_buffer(VkPhysicalDevice physical_device,
     VkBufferCreateInfo buffer_info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     buffer_info.size = size;
     buffer_info.usage = usage;
+#if defined(FSR4_RESEARCH_CAPTURE)
+    buffer_info.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+#endif
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     check(vkCreateBuffer(device, &buffer_info, nullptr, &result.buffer), "vkCreateBuffer");
 
     VkMemoryRequirements requirements{};
     vkGetBufferMemoryRequirements(device, result.buffer, &requirements);
+    result.allocation_size=requirements.size;
     VkMemoryAllocateFlagsInfo flags_info{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO};
     flags_info.flags = device_address ? VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT : 0;
     VkMemoryAllocateInfo allocation{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
@@ -179,12 +194,16 @@ inline Image create_image(VkPhysicalDevice physical_device,
     image_info.samples = VK_SAMPLE_COUNT_1_BIT;
     image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
     image_info.usage = usage;
+#if defined(FSR4_RESEARCH_CAPTURE)
+    image_info.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+#endif
     image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     check(vkCreateImage(device, &image_info, nullptr, &result.image), "vkCreateImage");
 
     VkMemoryRequirements requirements{};
     vkGetImageMemoryRequirements(device, result.image, &requirements);
+    result.allocation_size=requirements.size;
     VkMemoryAllocateInfo allocation{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
     allocation.allocationSize = requirements.size;
     allocation.memoryTypeIndex = memory_type(physical_device, requirements.memoryTypeBits,
@@ -232,19 +251,22 @@ inline VkDeviceAddress device_address(PFN_vkGetBufferDeviceAddress get_buffer_de
     return get_buffer_device_address(device, &info);
 }
 
-// Experimental fixed-Quality context. Caller submits frames in recording order
+// One model/preset core. Caller submits frames in recording order
 // on one queue, and completes all submissions before destroying this object.
 class QualityContext {
     VkPhysicalDevice physical_device;
     VkDevice device;
-    PFN_vkGetDeviceProcAddr get_device_proc_addr;
     fsr4vk::DeviceDispatch dispatch;
+    fsr4vk::DescriptorDispatch descriptor_dispatch;
+    fsr4vk::DescriptorLayout descriptor_layout;
     VkSampler sampler{};
     VkPipelineLayout pipeline_layout{};
     std::array<VkDescriptorSetLayout,4> set_layouts{};
     std::vector<VkShaderModule> modules;
     std::vector<VkPipeline> pipelines;
     std::vector<VkPipeline> owned_pipelines;
+    VkPipelineCache pipeline_cache{};
+    std::function<void(const std::string&)> build_message;
     std::array<std::array<VkPipeline,2>,4> color_pipelines{};
     fs::path color_shader_dir;
     ColorSpace active_color = ColorSpace::Linear;
@@ -260,33 +282,63 @@ class QualityContext {
     VkQueryPool profile_queries{};
     double timestamp_period = 0;
     std::string profile_path;
+    std::ofstream profile_output;
+    uint32_t profile_query_count=0,profile_queue_family=UINT32_MAX,timestamp_bits=0;
+    uint32_t last_profile_base=0;
+    uint64_t profile_serial=0;
+    std::string profile_preset;
     float previous_exposure = 0;
     struct Frame {
         std::array<Buffer,3> descriptors{};
         Buffer constants{};
         VkEvent done{};
         bool used = false;
+        bool descriptors_initialized=false;
+        bool profile_pending=false;
+        uint32_t profile_base=0,width=0,height=0,render_width=0,render_height=0;
+        uint64_t serial=0;
+        ColorSpace color=ColorSpace::Linear;
         std::vector<VkImageView> views;
     };
     std::array<Frame,8> frames{};
     size_t next_frame = 0;
+    void collect_profile(Frame& frame) noexcept {
+        if(!profile_queries || !frame.profile_pending) return;
+        frame.profile_pending=false;
+        try {
+            std::array<uint64_t,56> values{};
+            const auto result=vkGetQueryPoolResults(device,profile_queries,frame.profile_base,profile_query_count,
+                sizeof(values),values.data(),sizeof(uint64_t),VK_QUERY_RESULT_64_BIT);
+            profile_output << std::setprecision(12) << "{\"schema\":2,\"frame\":" << frame.serial
+                << ",\"model\":\"" << (fsr411 ? "4.1.1" : "4.0.2") << "\",\"backend\":\"" << shader_backend()
+                << "\",\"preset\":\"" << profile_preset << "\",\"color\":\"" << color_space_name(frame.color)
+                << "\",\"render_size\":[" << frame.render_width << ',' << frame.render_height
+                << "],\"output_size\":[" << frame.width << ',' << frame.height
+                << "],\"queue_family\":" << profile_queue_family << ",\"timestamp_valid_bits\":" << timestamp_bits
+                << ",\"timestamp_period_ns\":" << timestamp_period << ",\"vk_result\":" << int(result)
+                << ",\"available\":" << (result==VK_SUCCESS ? "true" : "false") << ",\"passes\":";
+            if(result!=VK_SUCCESS) profile_output << "null";
+            else {
+                profile_output << '{';
+                for(uint32_t i=0;i<profile_query_count/2;++i) {
+                    if(i) profile_output << ',';
+                    const char* name=nms_inputs && i==0 ? "auto_exposure" : fsr411 ? fsr4::k411PassNames[i-1] : kPasses[i-(nms_inputs ? 1 : 0)].name;
+                    const auto ticks=fsr4vk::timestamp_delta(values[i*2],values[i*2+1],timestamp_bits);
+                    profile_output << '"' << name << "\":" << double(ticks)*timestamp_period/1e6;
+                }
+                profile_output << '}';
+            }
+            profile_output << "}\n";
+        } catch(...) { /* Optional measurement never changes upscaler success. */ }
+    }
     void release() {
         if (profile_queries) {
-            // Caller has completed GPU work before destruction. Read only the
-            // final frame; repeated resets are ordered on the context's queue.
-            try {
-                std::array<uint64_t,56> values{};
-                const uint32_t count=fsr411 ? 56 : nms_inputs ? 30 : 28;
-                if (initialized && vkGetQueryPoolResults(device,profile_queries,0,count,sizeof(values),
-                    values.data(),sizeof(uint64_t),VK_QUERY_RESULT_64_BIT)==VK_SUCCESS) {
-                    std::ofstream out(profile_path);
-                    out << "pass,gpu_ms\n";
-                    for (uint32_t i=0;i<count/2;++i) {
-                        const char* name=nms_inputs && i==0 ? "auto_exposure" : fsr411 ? fsr4::k411PassNames[i-1] : kPasses[i-(nms_inputs ? 1 : 0)].name;
-                        out << name << ',' << double(values[i*2+1]-values[i*2])*timestamp_period/1e6 << '\n';
-                    }
-                }
-            } catch (...) { }
+            // No waits here. Caller must complete GPU work before destruction.
+            std::array<Frame*,8> ordered{};
+            for(size_t i=0;i<frames.size();++i) ordered[i]=&frames[i];
+            std::sort(ordered.begin(),ordered.end(),[](auto* a,auto* b){return a->serial<b->serial;});
+            for(auto* frame:ordered) collect_profile(*frame);
+            profile_output.close();
             vkDestroyQueryPool(device,profile_queries,nullptr);
         }
         for (auto& f : frames) {
@@ -296,6 +348,7 @@ class QualityContext {
             destroy_buffer(device,f.constants);
         }
         for (auto p : owned_pipelines) vkDestroyPipeline(device,p,nullptr);
+        if(pipeline_cache) vkDestroyPipelineCache(device,pipeline_cache,nullptr);
         for (auto m : modules) vkDestroyShaderModule(device,m,nullptr);
         if (pipeline_layout) vkDestroyPipelineLayout(device,pipeline_layout,nullptr);
         for (auto l : set_layouts) if (l) vkDestroyDescriptorSetLayout(device,l,nullptr);
@@ -325,25 +378,48 @@ public:
     }
 private:
     VkPipeline create_pipeline(const std::vector<std::uint32_t>& original,const char* name) {
+        const auto started=std::chrono::steady_clock::now();
+        if(build_message) build_message(std::string("pipeline_enter name=")+name+" words="+std::to_string(original.size()));
         const auto& code=original;
         VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
         module_info.codeSize=code.size()*sizeof(std::uint32_t);
         module_info.pCode=code.data();
         VkShaderModule module{};
         check(vkCreateShaderModule(device,&module_info,nullptr,&module),name);
-        modules.push_back(module);
+        adopt_resource(modules,module,[&](auto handle){vkDestroyShaderModule(device,handle,nullptr);});
         VkPipelineShaderStageCreateInfo stage{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
         stage.stage=VK_SHADER_STAGE_COMPUTE_BIT; stage.module=module; stage.pName="main";
         VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
         info.flags=VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
         info.stage=stage; info.layout=pipeline_layout;
         VkPipeline pipeline{};
-        check(vkCreateComputePipelines(device,VK_NULL_HANDLE,1,&info,nullptr,&pipeline),name);
-        owned_pipelines.push_back(pipeline);
+        const auto result=vkCreateComputePipelines(device,pipeline_cache,1,&info,nullptr,&pipeline);
+        if(pipeline) adopt_resource(owned_pipelines,pipeline,[&](auto handle){vkDestroyPipeline(device,handle,nullptr);});
+        check(result,name);
+        if(build_message) build_message(std::string("pipeline_complete name=")+name+" cpu_ms="+
+            std::to_string(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-started).count()));
         return pipeline;
     }
+    VkDeviceAddress buffer_address(const Buffer& buffer) const {
+        if(!buffer.cached_address) {
+            buffer.cached_address=device_address(dispatch.get_buffer_device_address,device,buffer.buffer);
+            if(!buffer.cached_address) throw std::runtime_error("FSR4VK_ERROR_MISSING_DEVICE_FEATURES: owned buffer returned a null device address; bufferDeviceAddress must be enabled");
+        }
+        return buffer.cached_address;
+    }
 public:
+    uint32_t last_profile_query_base() const noexcept {return last_profile_base;}
     const Buffer& initializer_allocation() const { return buffers.at(4); }
+    uint64_t owned_allocation_bytes() const noexcept {
+        uint64_t bytes=0;
+        for(const auto& b:buffers) bytes+=b.allocation_size;
+        for(const auto& image:images) bytes+=image.allocation_size;
+        for(const auto& frame:frames) {
+            bytes+=frame.constants.allocation_size;
+            for(const auto& b:frame.descriptors) bytes+=b.allocation_size;
+        }
+        return bytes; // VkDeviceMemory allocations; excludes driver-owned caches.
+    }
     const char* shader_backend() const {
         return native_mixed_dot ? "native-mixed-dot" : "portable-int8";
     }
@@ -358,10 +434,14 @@ public:
                    uint32_t max_output_width,
                    uint32_t max_output_height,
                    uint32_t api_version,
-                   bool external_exposure_input = false, bool use_fsr411 = false)
+                   bool external_exposure_input = false, bool use_fsr411 = false,
+                   std::optional<bool> robust_buffer_access=std::nullopt,
+                   std::optional<bool> enabled_native_mixed_dot=std::nullopt,
+                   std::function<void(const std::string&)> progress={},
+                   uint32_t queue_family_index=UINT32_MAX)
         : physical_device(physical), device(logical),
-          get_device_proc_addr(get_device_proc_addr),
-          dispatch(logical, get_device_proc_addr, api_version), nms_inputs(nms),
+          dispatch(logical, get_device_proc_addr, api_version,false),
+          descriptor_dispatch(logical,get_device_proc_addr),build_message(std::move(progress)),nms_inputs(nms),
           external_exposure(external_exposure_input) {
         fsr411=use_fsr411;
         if(fsr411 && !nms) throw std::invalid_argument("4.1.1 requires the general layout");
@@ -372,18 +452,45 @@ public:
         fsr4vk::validate_descriptor_commands(device,get_device_proc_addr);
         if(external_exposure && !nms_inputs)
             throw std::invalid_argument("external exposure adapter requires general model layout");
-        native_mixed_dot = !fsr411 && fsr4vk::supportsNativeMixedDot(
+        native_mixed_dot = !fsr411 && enabled_native_mixed_dot.value_or(true) && fsr4vk::supportsNativeMixedDot(
             physical, vkGetPhysicalDeviceFeatures2, vkEnumerateDeviceExtensionProperties);
+        VkPipelineCacheCreateInfo cache_info{VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO};
+        const auto cache_result=vkCreatePipelineCache(device,&cache_info,nullptr,&pipeline_cache);
+        if(cache_result==VK_ERROR_DEVICE_LOST) check(cache_result,"vkCreatePipelineCache");
+        if(cache_result!=VK_SUCCESS) {
+            if(pipeline_cache) vkDestroyPipelineCache(device,pipeline_cache,nullptr);
+            pipeline_cache=VK_NULL_HANDLE;
+            if(build_message) build_message("pipeline cache unavailable: "+fsr4vk::result_description(cache_result)+"; using uncached creation");
+        }
         if (const char* path=std::getenv("FSR4_VK_PROFILE_PATH")) {
             VkPhysicalDeviceProperties properties{};
             vkGetPhysicalDeviceProperties(physical_device,&properties);
-            if (!properties.limits.timestampComputeAndGraphics)
-                throw std::runtime_error("compute timestamps unavailable");
             timestamp_period=properties.limits.timestampPeriod;
-            profile_path=path;
-            VkQueryPoolCreateInfo query{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
-            query.queryType=VK_QUERY_TYPE_TIMESTAMP; query.queryCount=fsr411 ? 56 : 30;
-            check(vkCreateQueryPool(device,&query,nullptr,&profile_queries),"profile query pool");
+            uint32_t family_count=0;
+            vkGetPhysicalDeviceQueueFamilyProperties(physical_device,&family_count,nullptr);
+            std::vector<VkQueueFamilyProperties> families(family_count);
+            vkGetPhysicalDeviceQueueFamilyProperties(physical_device,&family_count,families.data());
+            if(queue_family_index<family_count) timestamp_bits=families[queue_family_index].timestampValidBits;
+            if(!timestamp_bits || timestamp_bits>64 || !std::isfinite(timestamp_period) || timestamp_period<=0) {
+                if(build_message) build_message("profiling disabled: recording queue family unknown or timestampValidBits unavailable");
+            } else {
+                static std::atomic<uint64_t> identities{0};
+                profile_path=std::string(path)+'.'+std::to_string(std::chrono::system_clock::now().time_since_epoch().count())+
+                    '.'+std::to_string(identities.fetch_add(1))+".jsonl";
+                profile_output.open(profile_path,std::ios::app); // Never truncate another core/session.
+                profile_preset=shader_dir.filename().string();
+                if(profile_preset.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789-_")!=std::string::npos) profile_preset="unknown";
+                profile_queue_family=queue_family_index;
+                profile_query_count=fsr411 ? 56 : nms_inputs ? 30 : 28;
+                VkQueryPoolCreateInfo query{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+                query.queryType=VK_QUERY_TYPE_TIMESTAMP; query.queryCount=profile_query_count*uint32_t(frames.size());
+                const auto result=profile_output ? vkCreateQueryPool(device,&query,nullptr,&profile_queries) : VK_ERROR_INITIALIZATION_FAILED;
+                if(result!=VK_SUCCESS) {
+                    if(profile_queries) vkDestroyQueryPool(device,profile_queries,nullptr);
+                    profile_queries=VK_NULL_HANDLE;
+                    if(build_message) build_message("profiling disabled: query pool/file initialization failed: "+fsr4vk::result_description(result));
+                } else if(build_message) build_message("profile samples="+profile_path);
+            }
         }
         VkSamplerCreateInfo sampler_info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
         sampler_info.magFilter = VK_FILTER_LINEAR;
@@ -513,7 +620,7 @@ public:
                 : read_spirv(shader_dir/name);
             if(!fsr411 && index==11) fsr4::guard_model11_rows(code);
             if(fsr411 && index==0)fsr4::guard_fsr411_prepass_quads(code);
-            pipelines.push_back(create_pipeline(code,spd ? "auto_exposure" : fsr411 ? "fsr411" : kPasses[index].name));
+            pipelines.push_back(create_pipeline(code,spd ? "auto_exposure" : fsr411 ? name.c_str() : kPasses[index].name));
         }
         color_pipelines[0]={pipelines[0],pipelines[fsr411 ? 26 : 13]};
 
@@ -557,44 +664,26 @@ public:
             get_binding_offset(device, set_layouts[index], descriptor_bindings[index],
                                &descriptor_binding_offsets[index]);
         }
-        // Set 2 consists solely of the mutable descriptor array, so its queried
-        // byte size exposes the implementation-selected stride for that binding.
-        // This may include padding beyond the largest concrete descriptor size.
-        const VkDeviceSize mutable_descriptor_stride =
-            descriptor_layout_sizes[2] / kDescriptorCount;
-        const VkDeviceSize image_heap_stride =
-            (descriptor_layout_sizes[1] - descriptor_binding_offsets[1]) /
-            kDescriptorCount;
-        if (mutable_descriptor_stride == 0 ||
-            mutable_descriptor_stride != image_heap_stride) {
-            throw std::runtime_error("inconsistent mutable descriptor strides");
-        }
+        // Properties determine descriptor strides; queried set sizes only bound
+        // the allocation. Drivers are allowed to pad the overall layouts.
+        descriptor_layout=fsr4vk::DescriptorLayout(descriptor_properties,descriptor_layout_sizes,
+                                                   descriptor_binding_offsets,robust_buffer_access);
 
 
 
         buffers.reserve(9);
-        for (std::size_t index = 0; index < descriptor_layout_sizes.size(); ++index) {
-            const bool sampler_buffer = index == 0;
-            const VkBufferUsageFlags usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
-                (sampler_buffer
-                     ? VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT
-                     : VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT);
-            buffers.push_back(create_buffer(
-                physical_device, device, descriptor_layout_sizes[index], usage,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                true));
-            std::memset(buffers.back().mapped, 0,
-                        static_cast<std::size_t>(descriptor_layout_sizes[index]));
-        }
+        // Preserve stable scratch/initializer indices without allocating three
+        // descriptor buffers that recording never uses (slots own their storage).
+        buffers.resize(3);
 
-        buffers.push_back(create_buffer(
+        const auto add_buffer=[&](Buffer buffer){adopt_resource(buffers,buffer,[&](auto& value){destroy_buffer(device,value);});};
+        add_buffer(create_buffer(
             physical_device, device, fsr4::scratch_capacity(max_output_width,max_output_height),
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT,
             VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, true));
         const auto initializer_bytes = read_bytes(initializer_path);
-        buffers.push_back(create_buffer(
+        add_buffer(create_buffer(
             physical_device, device, initializer_bytes.size(),
             VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, true,
@@ -603,7 +692,7 @@ public:
         std::memcpy(initializer.mapped, initializer_bytes.data(), initializer_bytes.size());
         const auto weights_bytes = fsr411 ? std::vector<uint8_t>(1024) : read_bytes(weights_path);
         if (weights_bytes.size() != 1024) throw std::runtime_error("weights must be 1024 bytes");
-        buffers.push_back(create_buffer(
+        add_buffer(create_buffer(
             physical_device, device, kPhysicalConstantBackingSize,
             VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, true));
@@ -627,19 +716,20 @@ public:
             VkEventCreateInfo ei{VK_STRUCTURE_TYPE_EVENT_CREATE_INFO};
             check(vkCreateEvent(device,&ei,nullptr,&f.done),"vkCreateEvent");
         }
-        images.reserve(3);
+        images.reserve(6);
+        const auto add_image=[&](Image image){adopt_resource(images,image,[&](auto& value){destroy_image(device,value);});};
         for (auto format : {VK_FORMAT_R16G16B16A16_SFLOAT,
                             VK_FORMAT_R16G16B16A16_SFLOAT,VK_FORMAT_R8G8B8A8_UNORM})
-            images.push_back(create_image(physical_device,device,
+            add_image(create_image(physical_device,device,
                 fsr411 ? max_output_width : fsr4::round_up(max_output_width,8),
                 fsr411 ? max_output_height : fsr4::round_up(max_output_height,8),format,
                 VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT));
         if (nms_inputs) {
             const auto usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
                                VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-            images.push_back(create_image(physical_device,device,2,1,VK_FORMAT_R32_SFLOAT,usage));
-            images.push_back(create_image(physical_device,device,1,1,VK_FORMAT_R32_UINT,usage));
-            images.push_back(create_image(physical_device,device,fsr4::divide_up(max_input_width,16),fsr4::divide_up(max_input_height,16),VK_FORMAT_R32_SFLOAT,usage));
+            add_image(create_image(physical_device,device,2,1,VK_FORMAT_R32_SFLOAT,usage));
+            add_image(create_image(physical_device,device,1,1,VK_FORMAT_R32_UINT,usage));
+            add_image(create_image(physical_device,device,fsr4::divide_up(max_input_width,16),fsr4::divide_up(max_input_height,16),VK_FORMAT_R32_SFLOAT,usage));
         }
       } catch (...) { release(); throw; }
     }
@@ -652,14 +742,18 @@ public:
         auto& frame = frames[next_frame];
         if (frame.used) {
             auto status = vkGetEventStatus(device,frame.done);
-            if (status != VK_EVENT_SET)
+            if (status == VK_EVENT_RESET)
                 throw std::runtime_error("Quality context has eight frames still in flight");
+            if (status != VK_EVENT_SET)
+                throw std::runtime_error("vkGetEventStatus failed with "+fsr4vk::result_description(status));
+            collect_profile(frame); // Retired slot only; never WAIT_BIT.
             check(vkResetEvent(device,frame.done),"vkResetEvent");
             frame.used = false;
         }
         for (auto view : frame.views) vkDestroyImageView(device,view,nullptr);
         frame.views.clear();
         frame.views.reserve(6);
+        const uint32_t profile_base=uint32_t(next_frame)*profile_query_count;
         Image supplied_exposure = exposure_image;
         if (nms_inputs) exposure_image = images[3];
         for (auto* image : {&color,&depth,&motion,&exposure_image,&output,
@@ -670,7 +764,7 @@ public:
                 const bool depth_format=image->format==VK_FORMAT_D32_SFLOAT_S8_UINT || image->format==VK_FORMAT_D32_SFLOAT;
                 vi.subresourceRange={depth_format ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};
                 check(vkCreateImageView(device,&vi,nullptr,&image->view),"external image view");
-                frame.views.push_back(image->view);
+                adopt_resource(frame.views,image->view,[&](auto view){vkDestroyImageView(device,view,nullptr);});
             }
         }
         auto& history = images[0];
@@ -678,60 +772,11 @@ public:
         auto& recurrent = images[2];
         auto& scratch = buffers[3];
         auto& initializer = buffers[4];
-        auto get_layout_size = reinterpret_cast<PFN_vkGetDescriptorSetLayoutSizeEXT>(
-            get_device_proc_addr(device, "vkGetDescriptorSetLayoutSizeEXT"));
-        auto get_binding_offset =
-            reinterpret_cast<PFN_vkGetDescriptorSetLayoutBindingOffsetEXT>(
-                get_device_proc_addr(device,
-                                    "vkGetDescriptorSetLayoutBindingOffsetEXT"));
-        auto get_descriptor = reinterpret_cast<PFN_vkGetDescriptorEXT>(
-            get_device_proc_addr(device, "vkGetDescriptorEXT"));
-        auto bind_descriptor_buffers =
-            reinterpret_cast<PFN_vkCmdBindDescriptorBuffersEXT>(
-                get_device_proc_addr(device, "vkCmdBindDescriptorBuffersEXT"));
-        auto set_descriptor_offsets =
-            reinterpret_cast<PFN_vkCmdSetDescriptorBufferOffsetsEXT>(
-                get_device_proc_addr(device,
-                                    "vkCmdSetDescriptorBufferOffsetsEXT"));
-        auto bind_embedded_samplers =
-            reinterpret_cast<PFN_vkCmdBindDescriptorBufferEmbeddedSamplersEXT>(
-                get_device_proc_addr(
-                    device, "vkCmdBindDescriptorBufferEmbeddedSamplersEXT"));
-        if (!get_layout_size || !get_binding_offset || !get_descriptor ||
-            !bind_descriptor_buffers || !set_descriptor_offsets ||
-            !bind_embedded_samplers) {
-            throw std::runtime_error("descriptor buffer entry point is unavailable");
-        }
-
-        VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptor_properties{
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT};
-        VkPhysicalDeviceProperties2 properties2{
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
-        properties2.pNext = &descriptor_properties;
-        vkGetPhysicalDeviceProperties2(physical_device, &properties2);
-        std::array<VkDeviceSize, 3> descriptor_layout_sizes{};
-        std::array<VkDeviceSize, 3> descriptor_binding_offsets{};
-        constexpr std::array<std::uint32_t, 3> descriptor_bindings{{0, 1, 0}};
-        for (std::size_t index = 0; index < descriptor_layout_sizes.size(); ++index) {
-            get_layout_size(device, set_layouts[index], &descriptor_layout_sizes[index]);
-            get_binding_offset(device, set_layouts[index], descriptor_bindings[index],
-                               &descriptor_binding_offsets[index]);
-        }
-        // Set 2 consists solely of the mutable descriptor array, so its queried
-        // byte size exposes the implementation-selected stride for that binding.
-        // This may include padding beyond the largest concrete descriptor size.
-        const VkDeviceSize mutable_descriptor_stride =
-            descriptor_layout_sizes[2] / kDescriptorCount;
-        const VkDeviceSize image_heap_stride =
-            (descriptor_layout_sizes[1] - descriptor_binding_offsets[1]) /
-            kDescriptorCount;
-        if (mutable_descriptor_stride == 0 ||
-            mutable_descriptor_stride != image_heap_stride) {
-            throw std::runtime_error("inconsistent mutable descriptor strides");
-        }
-
-
-
+        const auto& descriptor_properties=descriptor_layout.properties;
+        const auto get_descriptor=descriptor_dispatch.get_descriptor;
+        const auto bind_descriptor_buffers=descriptor_dispatch.bind_descriptor_buffers;
+        const auto set_descriptor_offsets=descriptor_dispatch.set_descriptor_offsets;
+        const auto bind_embedded_samplers=descriptor_dispatch.bind_embedded_samplers;
         // Redirect writes to this frame's descriptor storage.
         const auto write_image_descriptor_buffer = [&](uint32_t index, VkDescriptorType type, VkImageView view) {
             VkDescriptorImageInfo ii{};
@@ -745,18 +790,19 @@ public:
                 di.data.pSampledImage=&ii; size=descriptor_properties.sampledImageDescriptorSize;
             } else { di.data.pStorageImage=&ii; size=descriptor_properties.storageImageDescriptorSize; }
             get_descriptor(device,&di,size,static_cast<uint8_t*>(frame.descriptors[1].mapped)+
-                descriptor_binding_offsets[1]+index*mutable_descriptor_stride);
+                descriptor_layout.offset(1,index,size));
         };
         const auto write_buffer_descriptor_buffer = [&](uint32_t index,const Buffer& buffer) {
             VkDescriptorAddressInfoEXT ai{VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT};
-            ai.address=device_address(dispatch.get_buffer_device_address, device,buffer.buffer); ai.range=buffer.size;
+            ai.address=buffer_address(buffer); ai.range=buffer.size;
             VkDescriptorGetInfoEXT di{VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT};
             di.type=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; di.data.pStorageBuffer=&ai;
-            get_descriptor(device,&di,descriptor_properties.storageBufferDescriptorSize,
+            get_descriptor(device,&di,descriptor_layout.storage_buffer_size,
                 static_cast<uint8_t*>(frame.descriptors[2].mapped)+
-                descriptor_binding_offsets[2]+index*mutable_descriptor_stride);
+                descriptor_layout.offset(2,index,descriptor_layout.storage_buffer_size));
         };
-        for (auto& b:frame.descriptors) std::memset(b.mapped,0,b.size);
+        if(!frame.descriptors_initialized)
+            for (auto& b:frame.descriptors) std::memset(b.mapped,0,b.size);
         // Pre-pass image table: SRV base 12 and UAV base 0.
         write_image_descriptor_buffer(12, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                                       history.view);       // t0
@@ -793,6 +839,7 @@ public:
                                           external_exposure ? supplied_exposure.view : color.view);
         }
 
+        if(!frame.descriptors_initialized) {
         if(fsr411) {
             write_buffer_descriptor_buffer(11,scratch);
             write_buffer_descriptor_buffer(30,initializer);
@@ -807,6 +854,8 @@ public:
         }
         }
         write_buffer_descriptor_buffer(62, scratch);  // post u11
+        frame.descriptors_initialized=true;
+        }
 
 
         main_constants.previous_pre_exposure = previous_exposure;
@@ -869,8 +918,14 @@ public:
         before.dstAccessMask=VK_ACCESS_2_SHADER_READ_BIT|VK_ACCESS_2_SHADER_WRITE_BIT|VK_ACCESS_2_DESCRIPTOR_BUFFER_READ_BIT_EXT;
         dispatch.cmd_pipeline_barrier2(command_buffer,&dep);
         std::array<VkDeviceAddress,3> addresses{};
-        for(size_t i=0;i<3;++i) addresses[i]=device_address(
-            dispatch.get_buffer_device_address,device,frame.descriptors[i].buffer);
+#if defined(FSR4_RESEARCH_CAPTURE)
+        if(nms_inputs) {
+            fsr4capture::begin(physical_device,device,scratch.buffer,scratch.size,images[3].image,
+                reprojected.image,reprojected.width,reprojected.height,frame.constants.mapped,fsr411 ? 28 : 15);
+            fsr4capture::after_pass(command_buffer,-1);
+        }
+#endif
+        for(size_t i=0;i<3;++i) addresses[i]=buffer_address(frame.descriptors[i]);
         if (nms_inputs) {
             if (initialized)
                 image_barrier(dispatch.cmd_pipeline_barrier2,command_buffer,images[3].image,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -887,32 +942,35 @@ public:
             bind_descriptor_buffers(command_buffer,3,bindings.data());
             const uint32_t indices[]{0,1,2}; const VkDeviceSize offsets[]{0,0,0};
             set_descriptor_offsets(command_buffer,VK_PIPELINE_BIND_POINT_COMPUTE,pipeline_layout,0,3,indices,offsets);
-            const auto address=device_address(dispatch.get_buffer_device_address,device,frame.constants.buffer)+512;
+            const auto address=buffer_address(frame.constants)+512;
             const uint32_t push[]{external_exposure ? uint32_t(main_constants.reset!=0) : uint32_t(address),
                                   uint32_t(address>>32),90,93};
             vkCmdBindPipeline(command_buffer,VK_PIPELINE_BIND_POINT_COMPUTE,pipelines.back());
             vkCmdPushConstants(command_buffer,pipeline_layout,VK_SHADER_STAGE_COMPUTE_BIT,0,sizeof(push),push);
             if (profile_queries) {
-                vkCmdResetQueryPool(command_buffer,profile_queries,0,fsr411 ? 56 : 30);
-                dispatch.cmd_write_timestamp2(command_buffer,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,profile_queries,0);
+                vkCmdResetQueryPool(command_buffer,profile_queries,profile_base,profile_query_count);
+                dispatch.cmd_write_timestamp2(command_buffer,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,profile_queries,profile_base);
             }
             vkCmdDispatch(command_buffer,external_exposure ? 1 : (main_constants.width_lr+63)/64,
                           external_exposure ? 1 : (main_constants.height_lr+63)/64,1);
+#if defined(FSR4_RESEARCH_CAPTURE)
+            fsr4capture::after_pass(command_buffer,0);
+#endif
             if (profile_queries) dispatch.cmd_write_timestamp2(
-                command_buffer,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,profile_queries,1);
+                command_buffer,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,profile_queries,profile_base+1);
             image_barrier(dispatch.cmd_pipeline_barrier2,command_buffer,images[3].image,VK_IMAGE_LAYOUT_GENERAL,
                 VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                 VK_ACCESS_2_SHADER_WRITE_BIT,VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,VK_ACCESS_2_SHADER_READ_BIT);
         }
-        if (profile_queries && !nms_inputs) vkCmdResetQueryPool(command_buffer,profile_queries,0,fsr411 ? 56 : 30);
+        if (profile_queries && !nms_inputs) vkCmdResetQueryPool(command_buffer,profile_queries,profile_base,profile_query_count);
         if(fsr411) fsr4::record_fsr411_frame(command_buffer,pipeline_layout,std::span<const VkPipeline>(pipelines).first(27),addresses,
-            device_address(dispatch.get_buffer_device_address,device,frame.constants.buffer),history.image,recurrent.image,reprojected.image,
-            bind_descriptor_buffers,set_descriptor_offsets,bind_embedded_samplers,profile_queries,2,
+            buffer_address(frame.constants),history.image,recurrent.image,reprojected.image,
+            bind_descriptor_buffers,set_descriptor_offsets,bind_embedded_samplers,profile_queries,profile_base+2,
             main_constants.width,main_constants.height,model_capacity_width,model_capacity_height,
             dispatch.cmd_pipeline_barrier2,dispatch.cmd_write_timestamp2);
         else fsr4::record_quality_frame(command_buffer,pipeline_layout,std::span<const VkPipeline>(pipelines).first(kPasses.size()),addresses,
-            device_address(dispatch.get_buffer_device_address,device,frame.constants.buffer),history.image,recurrent.image,reprojected.image,
-            bind_descriptor_buffers,set_descriptor_offsets,bind_embedded_samplers,profile_queries,nms_inputs ? 2 : 0,
+            buffer_address(frame.constants),history.image,recurrent.image,reprojected.image,
+            bind_descriptor_buffers,set_descriptor_offsets,bind_embedded_samplers,profile_queries,profile_base+(nms_inputs ? 2 : 0),
             main_constants.width,main_constants.height,dispatch.cmd_pipeline_barrier2,
             dispatch.cmd_write_timestamp2);
         VkMemoryBarrier2 end{VK_STRUCTURE_TYPE_MEMORY_BARRIER_2};
@@ -922,6 +980,13 @@ public:
         done.memoryBarrierCount=1; done.pMemoryBarriers=&end;
         dispatch.cmd_set_event2(command_buffer,frame.done,&done);
         frame.used=true;
+        frame.profile_pending=profile_queries!=VK_NULL_HANDLE;
+        frame.profile_base=profile_base;
+        frame.serial=profile_serial++;
+        frame.width=main_constants.width;frame.height=main_constants.height;
+        frame.render_width=main_constants.width_lr;frame.render_height=main_constants.height_lr;
+        frame.color=active_color;
+        last_profile_base=profile_base;
         next_frame=(next_frame+1)%frames.size();
         initialized=true;
         previous_exposure=main_constants.pre_exposure;

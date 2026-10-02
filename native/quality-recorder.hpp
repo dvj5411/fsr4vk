@@ -5,6 +5,9 @@
 #include <cstdint>
 #include <span>
 #include <stdexcept>
+#if defined(FSR4_RESEARCH_CAPTURE)
+#include "research-pass-capture.hpp"
+#endif
 
 namespace fsr4 {
 struct Pass {
@@ -197,6 +200,9 @@ inline void record_quality_frame(
                            VK_SHADER_STAGE_COMPUTE_BIT, 0, push_size, push.data());
         const auto groups=quality_dispatch(uint32_t(index),output_width,output_height);
         vkCmdDispatch(command_buffer, groups[0], groups[1], 1);
+#if defined(FSR4_RESEARCH_CAPTURE)
+        fsr4capture::after_pass(command_buffer,int(index)+1);
+#endif
         if (timestamps) write_timestamp2(command_buffer,VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
                                          timestamps,timestamp_base+uint32_t(index)*2+1);
         if (index + 1 < kPasses.size()) compute_barrier(pipeline_barrier2, command_buffer);

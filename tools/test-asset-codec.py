@@ -2,6 +2,7 @@
 """Exercise the actual C++ resource decoder without requiring Vulkan/Windows."""
 import argparse,os,subprocess,tempfile
 from pathlib import Path
+from asset_compression import compress_bytes, frame_content_size
 
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--output',type=Path,required=True)
@@ -17,11 +18,17 @@ with tempfile.TemporaryDirectory(prefix='fsr4-codec-') as temporary:
     def run(exe,compressed,size,data,expected=None):
         encoded.write_bytes(data)
         result=subprocess.run([str(exe.resolve()),str(int(compressed)),str(size),str(encoded)],capture_output=True)
-        if expected is None:assert result.returncode!=0,'corruption was accepted'
-        else:assert result.returncode==0 and result.stdout==expected,result.stderr
+        if expected is None:
+            if result.returncode==0:raise RuntimeError('corruption was accepted')
+        elif result.returncode or result.stdout!=expected:
+            raise RuntimeError(f'decoder output/status mismatch: {result.stderr!r}')
     for data in (b'x',b'abc'*8192,bytes(range(256))*512):
         original.write_bytes(data)
-        compressed=subprocess.check_output([zstd,'-q','-19','--check','--stdout',str(original)])
+        compressed=compress_bytes(data,zstd)
+        unknown_size=subprocess.run([zstd,'-q','-19','--check','--stdout'],input=data,check=True,capture_output=True).stdout
+        if frame_content_size(unknown_size) is not None:
+            raise RuntimeError('unknown-size regression fixture unexpectedly carries a size')
+        run(probe,True,len(data),unknown_size)
         for exe in (probe,raw):run(exe,False,len(data),data,data)
         run(probe,True,len(data),compressed,data)
         run(raw,True,len(data),compressed)

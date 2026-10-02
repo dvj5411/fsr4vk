@@ -1,0 +1,43 @@
+name: Owned CPU correctness gate
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'codex/release-v0.4.3']
+permissions:
+  contents: read
+jobs:
+  cpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: KhronosGroup/Vulkan-Headers
+          ref: 354fab82dbd91d2526a41ee4dbfff1012a623798
+          path: build/vulkan-headers
+      - uses: actions/checkout@v4
+        with:
+          repository: dvj5411/OptiScaler
+          ref: 613492a8909929dfd618b03df08e47b07055c0b0
+          path: build/opti-reader
+      - name: CPU tests (no GPU or deployment)
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zstd g++-mingw-w64-x86-64
+          python3 tools/test-codebase.py --vulkan-include "$PWD/build/vulkan-headers/include" --opti-reader "$PWD/build/opti-reader/OptiScaler/upscalers/ffx" --mingw-cxx x86_64-w64-mingw32-g++ --output "$PWD/build/ci-evidence"
+      - name: Release ZIP policy and embedding checks
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 tools/test-package-release.py -v
+          python3 -O tools/test-package-release.py -v
+          python3 tools/test-embed-general-assets.py -v
+          python3 -O tools/verify-general-assets.py assets/general
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cpu-evidence
+          path: build/ci-evidence
+          if-no-files-found: error

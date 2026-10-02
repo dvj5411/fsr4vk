@@ -7,6 +7,8 @@
 #include <cstddef>
 #include <iostream>
 #include <type_traits>
+#include <thread>
+#include <limits>
 
 // This CPU test creates no GPU resources. With dead stripping, only teardown
 // symbols remain reachable through ProviderContext's empty core map. Fail hard
@@ -19,6 +21,7 @@ FORBID_DESTROY(vkDestroyEvent, VkEvent)
 FORBID_DESTROY(vkDestroyImage, VkImage)
 FORBID_DESTROY(vkDestroyImageView, VkImageView)
 FORBID_DESTROY(vkDestroyPipeline, VkPipeline)
+FORBID_DESTROY(vkDestroyPipelineCache, VkPipelineCache)
 FORBID_DESTROY(vkDestroyPipelineLayout, VkPipelineLayout)
 FORBID_DESTROY(vkDestroyQueryPool, VkQueryPool)
 FORBID_DESTROY(vkDestroySampler, VkSampler)
@@ -82,6 +85,23 @@ int main() {
     assert((static_cast<ProviderContext*>(external)->flags & FFX_UPSCALE_ENABLE_NON_LINEAR_COLORSPACE)!=0);
     assert(ffxDestroyContext(&external,nullptr)==FFX_API_RETURN_OK);
     create.flags&=~FFX_UPSCALE_ENABLE_NON_LINEAR_COLORSPACE;
+    create.header.pNext=&create.header;
+    assert(ffxCreateContext(&external,&create.header,nullptr)==FFX_API_RETURN_ERROR_PARAMETER);
+    assert(external==nullptr);
+    create.header.pNext=&backend.header;
+    ffxAllocationCallbacks noMemory{nullptr,[](void*,uint64_t)->void*{return nullptr;},[](void*,void*){std::abort();}};
+    assert(ffxCreateContext(&external,&create.header,&noMemory)==FFX_API_RETURN_ERROR_MEMORY);
+    ffxAllocationCallbacks throwing{nullptr,[](void*,uint64_t)->void*{throw std::bad_alloc();},[](void*,void*){std::abort();}};
+    assert(ffxCreateContext(&external,&create.header,&throwing)==FFX_API_RETURN_ERROR_MEMORY);
+    assert(external==nullptr);
+    Fsr4VkCreateDeviceFeatures features{{FSR4VK_CREATE_DESC_TYPE_DEVICE_FEATURES,backend.header.pNext},FSR4VK_DEVICE_ROBUST_BUFFER_ACCESS,VK_API_VERSION_1_3};
+    backend.header.pNext=&features.header;
+    assert(ffxCreateContext(&external,&create.header,nullptr)==FFX_API_RETURN_OK);
+    assert(static_cast<ProviderContext*>(external)->robust_buffer_access==true);
+    assert(static_cast<ProviderContext*>(external)->native_mixed_dot_enabled==false);
+    assert(static_cast<ProviderContext*>(external)->apiVersion==VK_API_VERSION_1_3);
+    assert(ffxDestroyContext(&external,nullptr)==FFX_API_RETURN_OK);
+    backend.header.pNext=features.header.pNext;
     create.fpMessage=messageCallback;
     missingCommand="vkCmdBindDescriptorBuffersEXT";
     assert(ffxCreateContext(&external,&create.header,nullptr)==FFX_API_RETURN_ERROR_RUNTIME_ERROR);
@@ -107,6 +127,30 @@ int main() {
     ProviderContext provider;
     ffxContext context = &provider;
     ffxContext empty = nullptr;
+    int32_t phase=99;
+    ffxQueryDescUpscaleGetJitterPhaseCount phaseQuery{{FFX_API_QUERY_DESC_TYPE_UPSCALE_GETJITTERPHASECOUNT,nullptr},1280,1920,&phase};
+    assert(ffxQuery(nullptr,&phaseQuery.header)==FFX_API_RETURN_OK && phase==18);
+    phaseQuery.renderWidth=1;phaseQuery.displayWidth=UINT32_MAX;
+    assert(ffxQuery(nullptr,&phaseQuery.header)==FFX_API_RETURN_ERROR_PARAMETER && phase==18);
+    phaseQuery.displayWidth=0;
+    assert(ffxQuery(nullptr,&phaseQuery.header)==FFX_API_RETURN_ERROR_PARAMETER);
+    uint32_t width{},height{};
+    ffxQueryDescUpscaleGetRenderResolutionFromQualityMode resolutionQuery{{FFX_API_QUERY_DESC_TYPE_UPSCALE_GETRENDERRESOLUTIONFROMQUALITYMODE,nullptr},UINT32_MAX,1080,0,&width,&height};
+    assert(ffxQuery(nullptr,&resolutionQuery.header)==FFX_API_RETURN_OK && width==UINT32_MAX && height==1080);
+    for(uint32_t mode=0;mode<5;++mode) for(uint32_t display=1;display<=3840;++display) {
+        resolutionQuery.qualityMode=mode;resolutionQuery.displayWidth=display;
+        assert(ffxQuery(nullptr,&resolutionQuery.header)==FFX_API_RETURN_OK);
+        assert(width==uint32_t(std::ceil(float(display)/upscaleRatio(mode))));
+    }
+    ffxConfigureDescUpscaleKeyValue unsupported{{FFX_API_CONFIGURE_DESC_TYPE_UPSCALE_KEYVALUE,nullptr},UINT64_MAX,0,nullptr};
+    assert(ffxConfigure(&context,&unsupported.header)==FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE);
+    provider.message=messageCallback;
+    ffxDispatchDescUpscale invalid{};
+    invalid.header.type=FFX_API_DISPATCH_DESC_TYPE_UPSCALE;invalid.commandList=reinterpret_cast<void*>(1);
+    invalid.jitterOffset.x=std::numeric_limits<float>::quiet_NaN();
+    assert(std::string(dispatchScalarProblem(invalid))=="jitterOffset must contain finite values");
+    invalid.jitterOffset.x=0;invalid.motionVectorScale.y=std::numeric_limits<float>::infinity();
+    assert(std::string(dispatchScalarProblem(invalid))=="motionVectorScale must contain finite values");
     Fsr4VkQueryActivePreset desc{{FSR4VK_QUERY_DESC_TYPE_ACTIVE_PRESET, nullptr}, 42};
     assert(ffxQuery(&context, nullptr) == FFX_API_RETURN_ERROR_PARAMETER);
     assert(ffxQuery(nullptr, &desc.header) == FFX_API_RETURN_ERROR_PARAMETER);
@@ -231,5 +275,8 @@ int main() {
         // Simulate any early return: clear stale data, including failed dispatch.
     }
     assert(!displayed);
+    std::thread configureThread([&]{for(unsigned i=0;i<1000;++i){Fsr4VkConfigurePreset value{{FSR4VK_CONFIGURE_DESC_TYPE_PRESET,nullptr},i%6};assert(ffxConfigure(&context,&value.header)==FFX_API_RETURN_OK);}});
+    std::thread queryThread([&]{for(unsigned i=0;i<1000;++i){Fsr4VkQueryActivePreset value{{FSR4VK_QUERY_DESC_TYPE_ACTIVE_PRESET,nullptr},FSR4VK_PRESET_UNKNOWN};assert(ffxQuery(&context,&value.header)==FFX_API_RETURN_OK);}});
+    configureThread.join();queryThread.join();
     std::cout << "Preset reporting: provider query and reader tests passed\n";
 }

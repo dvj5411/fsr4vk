@@ -52,10 +52,11 @@ inline void validate_descriptor_commands(VkDevice device, PFN_vkGetDeviceProcAdd
 template <typename Function>
 inline Function load_promoted_device_function(
     VkDevice device, PFN_vkGetDeviceProcAddr get_device_proc_addr,
-    uint32_t api_version, const char *core_name, const char *khr_name) {
+    uint32_t api_version, const char *core_name, const char *khr_name,
+    uint32_t promoted_version=VK_API_VERSION_1_3) {
   const bool prefer_core = VK_API_VERSION_MAJOR(api_version) > 1 ||
                            (VK_API_VERSION_MAJOR(api_version) == 1 &&
-                            VK_API_VERSION_MINOR(api_version) >= 3);
+                            VK_API_VERSION_MINOR(api_version) >= VK_API_VERSION_MINOR(promoted_version));
   if (prefer_core) {
     return load_device_function<Function>(device, get_device_proc_addr,
                                           {core_name, khr_name});
@@ -79,12 +80,12 @@ struct DeviceDispatch {
   DeviceDispatch() = default;
   DeviceDispatch(VkDevice device,
                  PFN_vkGetDeviceProcAddr get_device_proc_addr,
-                 uint32_t api_version = VK_API_VERSION_1_3) {
-    load(device, get_device_proc_addr, api_version);
+                 uint32_t api_version = VK_API_VERSION_1_3, bool require_submission=true) {
+    load(device, get_device_proc_addr, api_version,require_submission);
   }
 
   void load(VkDevice device, PFN_vkGetDeviceProcAddr get_device_proc_addr,
-            uint32_t api_version = VK_API_VERSION_1_3) {
+            uint32_t api_version = VK_API_VERSION_1_3, bool require_submission=true) {
     cmd_pipeline_barrier2 =
         load_promoted_device_function<PFN_vkCmdPipelineBarrier2>(
             device, get_device_proc_addr, api_version,
@@ -99,10 +100,28 @@ struct DeviceDispatch {
     get_buffer_device_address =
         load_promoted_device_function<PFN_vkGetBufferDeviceAddress>(
             device, get_device_proc_addr, api_version,
-            "vkGetBufferDeviceAddress", "vkGetBufferDeviceAddressKHR");
-    queue_submit2 = load_promoted_device_function<PFN_vkQueueSubmit2>(
+            "vkGetBufferDeviceAddress", "vkGetBufferDeviceAddressKHR",VK_API_VERSION_1_2);
+    queue_submit2 = require_submission ? load_promoted_device_function<PFN_vkQueueSubmit2>(
         device, get_device_proc_addr, api_version, "vkQueueSubmit2",
-        "vkQueueSubmit2KHR");
+        "vkQueueSubmit2KHR") : nullptr;
+  }
+};
+
+struct DescriptorDispatch {
+  PFN_vkGetDescriptorSetLayoutSizeEXT get_layout_size{};
+  PFN_vkGetDescriptorSetLayoutBindingOffsetEXT get_binding_offset{};
+  PFN_vkGetDescriptorEXT get_descriptor{};
+  PFN_vkCmdBindDescriptorBuffersEXT bind_descriptor_buffers{};
+  PFN_vkCmdSetDescriptorBufferOffsetsEXT set_descriptor_offsets{};
+  PFN_vkCmdBindDescriptorBufferEmbeddedSamplersEXT bind_embedded_samplers{};
+  DescriptorDispatch()=default;
+  DescriptorDispatch(VkDevice device,PFN_vkGetDeviceProcAddr get) {
+    get_layout_size=load_device_function<PFN_vkGetDescriptorSetLayoutSizeEXT>(device,get,{"vkGetDescriptorSetLayoutSizeEXT"});
+    get_binding_offset=load_device_function<PFN_vkGetDescriptorSetLayoutBindingOffsetEXT>(device,get,{"vkGetDescriptorSetLayoutBindingOffsetEXT"});
+    get_descriptor=load_device_function<PFN_vkGetDescriptorEXT>(device,get,{"vkGetDescriptorEXT"});
+    bind_descriptor_buffers=load_device_function<PFN_vkCmdBindDescriptorBuffersEXT>(device,get,{"vkCmdBindDescriptorBuffersEXT"});
+    set_descriptor_offsets=load_device_function<PFN_vkCmdSetDescriptorBufferOffsetsEXT>(device,get,{"vkCmdSetDescriptorBufferOffsetsEXT"});
+    bind_embedded_samplers=load_device_function<PFN_vkCmdBindDescriptorBufferEmbeddedSamplersEXT>(device,get,{"vkCmdBindDescriptorBufferEmbeddedSamplersEXT"});
   }
 };
 

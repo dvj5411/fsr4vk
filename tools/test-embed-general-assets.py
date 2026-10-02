@@ -23,6 +23,11 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(identity(raw),identity(compressed))
             self.assertTrue(all(not e['compressed'] and e['size']==e['stored_size'] for e in raw['entries']))
             self.assertTrue(any(e['compressed'] for e in compressed['entries']))
+            for directory in (root/'raw', root/'compressed'):
+                for line in (directory/'embedded-assets.rc').read_text().splitlines():
+                    target=Path(json.loads(line.split(' RCDATA ',1)[1]))
+                    self.assertTrue(target.is_relative_to(directory.resolve()))
+                    self.assertTrue(target.is_file())
             self.assertLess(sum(e['stored_size'] for e in compressed['entries']),sum(e['size'] for e in raw['entries'])//2)
             before=(root/'compressed/embedded-assets.json').read_bytes()
             subprocess.run(command+[str(root/'compressed'),'--compression','zstd'],check=True,capture_output=True)

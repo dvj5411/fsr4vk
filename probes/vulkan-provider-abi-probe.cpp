@@ -12,6 +12,8 @@
 #endif
 
 #include <cstdint>
+#include <array>
+#include <limits>
 #include <iostream>
 #include <string>
 
@@ -97,6 +99,29 @@ int main(int argc, char** argv) {
     std::cout << "selector_names=FSR" << names[0] << ",FSR" << names[1] << '\n';
     std::cout << "version_list=both-models bounded_query=passed\n";
 
+    uint32_t rw=0, rh=0;
+    ffxQueryDescUpscaleGetRenderResolutionFromQualityMode resolution{};
+    resolution.header.type=FFX_API_QUERY_DESC_TYPE_UPSCALE_GETRENDERRESOLUTIONFROMQUALITYMODE;
+    resolution.displayWidth=resolution.displayHeight=std::numeric_limits<uint32_t>::max();
+    resolution.qualityMode=FFX_UPSCALE_QUALITY_MODE_NATIVEAA;
+    resolution.pOutRenderWidth=&rw; resolution.pOutRenderHeight=&rh;
+    if(query(nullptr,&resolution.header)!=FFX_API_RETURN_OK || rw!=resolution.displayWidth || rh!=resolution.displayHeight) return 1;
+    resolution.displayWidth=0;
+    if(query(nullptr,&resolution.header)!=FFX_API_RETURN_ERROR_PARAMETER) return 1;
+    int32_t phases=107;
+    ffxQueryDescUpscaleGetJitterPhaseCount phase{};
+    phase.header.type=FFX_API_QUERY_DESC_TYPE_UPSCALE_GETJITTERPHASECOUNT;
+    phase.renderWidth=1; phase.displayWidth=std::numeric_limits<uint32_t>::max(); phase.pOutPhaseCount=&phases;
+    if(query(nullptr,&phase.header)!=FFX_API_RETURN_ERROR_PARAMETER || phases!=107) return 1;
+    phase.renderWidth=0;
+    if(query(nullptr,&phase.header)!=FFX_API_RETURN_ERROR_PARAMETER) return 1;
+    float jx=1,jy=1;
+    ffxQueryDescUpscaleGetJitterOffset jitter{};
+    jitter.header.type=FFX_API_QUERY_DESC_TYPE_UPSCALE_GETJITTEROFFSET;
+    jitter.index=-1; jitter.phaseCount=8; jitter.pOutX=&jx; jitter.pOutY=&jy;
+    if(query(nullptr,&jitter.header)!=FFX_API_RETURN_ERROR_PARAMETER || jx!=1 || jy!=1) return 1;
+    std::cout << "query_boundaries=uint32-native-resolution zero-size jitter-overflow negative-index-passed\n";
+
     ffxOverrideVersion overrideVersion{};
     overrideVersion.header.type = FFX_API_DESC_TYPE_OVERRIDE_VERSION;
     overrideVersion.versionId = id;
@@ -129,6 +154,30 @@ int main(int argc, char** argv) {
     const auto compatibilityResult = create(&providerContext, &createDesc.header, nullptr);
     std::cout << "fsr314_compatibility_result=" << compatibilityResult << '\n';
     if (compatibilityResult != FFX_API_RETURN_ERROR_RUNTIME_ERROR || providerContext) return 1;
+
+    overrideVersion.versionId=ids[0];
+    backend.header.pNext=&backend.header;
+    if(create(&providerContext,&createDesc.header,nullptr)!=FFX_API_RETURN_ERROR_PARAMETER || providerContext) return 1;
+    ffxOverrideVersion duplicate=overrideVersion;
+    duplicate.header.pNext=nullptr;
+    overrideVersion.header.pNext=&duplicate.header;
+    backend.header.pNext=&overrideVersion.header;
+    if(create(&providerContext,&createDesc.header,nullptr)!=FFX_API_RETURN_ERROR_PARAMETER || providerContext) return 1;
+    overrideVersion.header.pNext=nullptr;
+    backend.header.pNext=nullptr;
+    std::array<ffxApiHeader,63> nodes{};
+    for(size_t length : {size_t(62),size_t(63)}) {
+        for(size_t i=0;i<length;++i) {
+            nodes[i].type=0x7fffffff;
+            nodes[i].pNext=i+1<length ? &nodes[i+1] : &backend.header;
+        }
+        createDesc.header.pNext=&nodes[0];
+        const auto expected=length==62 ? FFX_API_RETURN_ERROR_RUNTIME_ERROR : FFX_API_RETURN_ERROR_PARAMETER;
+        if(create(&providerContext,&createDesc.header,nullptr)!=expected || providerContext) return 1;
+    }
+    createDesc.header.pNext=&backend.header;
+    backend.header.pNext=&overrideVersion.header;
+    std::cout << "create_chain=cycle duplicate-version 64-node-boundary-passed\n";
 
     overrideVersion.versionId = 1;
     const auto unknownVersionResult = create(&providerContext, &createDesc.header, nullptr);

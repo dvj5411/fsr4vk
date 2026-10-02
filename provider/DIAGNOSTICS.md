@@ -47,11 +47,8 @@ does not provide the rejected resource descriptors or prove a GPU device loss.
 The schema-2 log is needed to identify the actual failing descriptor fields.
 
 Update: the new `fsr4vk-provider-308-3.log` confirms depth-only usage and
-ambiguous SNORM motion metadata. v0.4.2 supports depth-only D32 and native RG16
-SNORM sampling. Its updated OptiScaler supplies the original motion VkFormat
-per dispatch; the provider log identifies `source=host-native-metadata`.
-The bundled OptiScaler includes this native-input handoff. Older hosts still
-need the explicit `FSR4_VK_MOTION_FORMAT=R16G16_SNORM` override for this alias.
+ambiguous SNORM motion metadata. See [the input-format candidate](ENSHROUDED-INPUTS.md)
+for the native D32 fix, opt-in RG16 SNORM path, and field-test instructions.
 
 The checked-in OptiScaler source maps `VK_FORMAT_R16G16_UNORM/SNORM` to FFX
 `R8G8B8A8_UNORM/SNORM`. It also maps several different depth formats to one FFX
@@ -59,8 +56,7 @@ format. Therefore a reported FFX format is **host-supplied metadata**, not proof
 of the original VkImage format. Vulkan provides no general query that recovers
 an arbitrary existing image's creation format. Do not reinterpret those images
 or relabel metadata blindly; an ambiguous case still needs the host's original
-VkImageCreateInfo or a host-side conversion. The bundled OptiScaler now provides
-that original motion format through the optional native-input descriptor.
+VkImageCreateInfo or a host-side conversion. OptiScaler is unchanged here.
 
 Similarly, physical feature support is not logical-device enablement. Vulkan
 does not expose a general post-creation query for enabled feature bits. Without

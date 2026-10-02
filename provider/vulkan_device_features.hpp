@@ -107,14 +107,23 @@ inline bool supportsNativeMixedDot(VkPhysicalDevice physical,
     VkPhysicalDeviceShaderMixedFloatDotProductFeaturesVALVE mixed {};
     mixed.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_MIXED_FLOAT_DOT_PRODUCT_FEATURES_VALVE;
     VkPhysicalDeviceFeatures2 features { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+    if (std::none_of(extensions.begin(), extensions.end(), [](const auto& extension) {
+            return std::strcmp(extension.extensionName,
+                               VK_KHR_SHADER_FLOAT_CONTROLS_2_EXTENSION_NAME) == 0;
+        }))
+        return false;
+    VkPhysicalDeviceShaderFloatControls2FeaturesKHR controls{};
+    controls.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT_CONTROLS_2_FEATURES_KHR;
+    mixed.pNext = &controls;
     features.pNext = &mixed;
     query(physical, &features);
-    return mixed.shaderMixedFloatDotProductFloat16AccFloat32 == VK_TRUE;
+    return mixed.shaderMixedFloatDotProductFloat16AccFloat32 == VK_TRUE &&
+           controls.shaderFloatControls2 == VK_TRUE;
 }
 
 // Owns copies: never modifies the application's const pNext chain. Unknown
 // structures are rejected, not silently dropped or guessed. Keep alive through
-// vkCreateDevice. Only used by the explicitly opted-in experimental path.
+// vkCreateDevice. Used by the host's generic device-requirements negotiation.
 class DeviceFeatures
 {
     std::vector<std::shared_ptr<void>> nodes;

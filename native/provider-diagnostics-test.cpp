@@ -36,6 +36,8 @@ int main() {
             FFX_API_RESOURCE_STATE_COMPUTE_READ,0,"R32_FLOAT");
     };
     require(problem(r).empty(),"valid depth rejected");
+    auto layered=r;layered.description.depth=2;
+    contains(problem(layered),"single-layer base-level 2D");
     auto bad=r; bad.resource=nullptr;
     contains(problem(bad),"missing depth resource"); contains(problem(bad),"handle is null");
     bad=r; bad.description.format=FFX_API_SURFACE_FORMAT_R16_UNORM;
